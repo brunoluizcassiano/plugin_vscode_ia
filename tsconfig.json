@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+      "target": "ES6",
+      "lib": ["es2020", "dom"],
+      "module": "commonjs",
+      "outDir": "out",
+      "rootDir": "src",
+      "strict": true,
+      "esModuleInterop": true,
+      "noEmitOnError": false,       // <-- agora ele vai gerar mesmo com erro
+      "skipLibCheck": true,         // <-- ignora erros de definição em node_modules
+      "types": ["node"]           // <-- garante tipos da API do VS Code
+    },
+    "include": ["src/**/*.ts"],
+    "exclude": ["node_modules", ".vscode-test"]
+   }
+  

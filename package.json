@@ -1,0 +1,114 @@
+{
+    "name": "form-plugin",
+    "displayName": "Form Plugin",
+    "description": "Exibe um formulário dentro do VSCode",
+    "version": "0.0.1",
+    "engines": {
+        "vscode": "^1.70.0"
+    },
+    "main": "./out/extension.js",
+    "activationEvents": [
+        "*",
+        "onView:homeView"
+    ],
+    "contributes": {
+        "configuration": {
+            "title": "Form Plugin",
+            "properties": {
+                "plugin.jira.domain": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Domínio do Jira (ex.: org.atlassian.net)"
+                },
+                "plugin.jira.email": {
+                    "type": "string",
+                    "default": "",
+                    "description": "E-mail do Jira"
+                },
+                "plugin.jira.token": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Token do Jira (texto plano)"
+                },
+                "plugin.zephyr.ownerId": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Owner ID do Zephyr Scale"
+                },
+                "plugin.zephyr.domain": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Domínio do Zephyr Scale"
+                },
+                "plugin.zephyr.token": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Token do Zephyr Scale (texto plano)"
+                },
+                "plugin.copilot.Cookie": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Cookie do Copilot (texto plano)"
+                }
+            }
+        },
+        "commands": [
+            {
+                "command": "plugin-vscode.openJira",
+                "title": "Abrir Jira"
+            },
+            {
+                "command": "plugin-vscode.getJiraUser",
+                "title": "Obter Usuário Jira"
+            },
+            {
+                "command": "plugin-vscode.openZephyr",
+                "title": "Abrir Zephyr"
+            },
+            {
+                "command": "plugin-vscode.backend",
+                "title": "Abrir Backend"
+            },
+            {
+                "command": "plugin-vscode.settings",
+                "title": "Abrir Backend"
+            }
+        ],
+        "viewsContainers": {
+            "activitybar": [
+                {
+                    "id": "formSidebar",
+                    "title": "COE QUALIDADE PLARD - AGENT",
+                    "icon": "media/icon.svg"
+                }
+            ]
+        },
+        "views": {
+            "formSidebar": [
+                {
+                    "id": "homeView",
+                    "name": "Início",
+                    "type": "webview"
+                }
+            ]
+        }
+    },
+    "scripts": {
+        "vscode:prepublish": "tsc -p ./",
+        "package": "vsce package"
+    },
+    "dependencies": {
+        "js-yaml": "^4.1.0",
+        "js-beautify": "^1.15.4",
+        "node-fetch": "^2.7.0"
+    },
+    "devDependencies": {
+        "@types/js-beautify": "^1.14.3",
+        "@types/js-yaml": "^4.0.9",
+        "@types/node": "^24.3.0",
+        "@types/node-fetch": "^2.6.12",
+        "@types/vscode": "^1.70.0",
+        "typescript": "^4.7.4",
+        "vsce": "^2.15.0"
+    }
+}
