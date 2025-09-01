@@ -97,14 +97,16 @@ function activate(context) {
             const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
             const auth = encodeAuth(jiraEmail, jiraToken);
             try {
-                const response = yield (0, node_fetch_1.default)(`https://${jiraDomain}/rest/api/3/project/search?categoryId=10018`, {
+                // const response = await fetch(`https://${jiraDomain}/rest/api/3/project/search?categoryId=10018`, {
+                const response = yield (0, node_fetch_1.default)(`https://${jiraDomain}/rest/api/3/project`, {
                     headers: {
                         'Authorization': `Basic ${auth}`,
                         'Accept': 'application/json',
                     },
                 });
                 const data = yield response.json();
-                return data.values.map((p) => ({ key: p.key, name: p.name }));
+                // return data.values.map((p: any) => ({ key: p.key, name: p.name }));
+                return data.map((p) => ({ key: p.key, name: p.name }));
             }
             catch (err) {
                 vscode.window.showErrorMessage(`Erro ao buscar projetos do Jira: ${err.message}`);
