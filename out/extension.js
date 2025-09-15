@@ -39,64 +39,10 @@ exports.activate = void 0;
 const node_fetch_1 = __importDefault(require("node-fetch"));
 const vscode = __importStar(require("vscode"));
 const homeViewProvider_1 = require("./homeViewProvider");
-const backendPanel_1 = require("./panel/backendPanel");
-const zephyrPanel_1 = require("./panel/zephyrPanel");
 const jiraPanel_1 = require("./panel/jiraPanel");
-// 🔌 PROXY APENAS NO WINDOWS
-const https_proxy_agent_1 = require("https-proxy-agent");
-const http_proxy_agent_1 = require("http-proxy-agent");
-const url = __importStar(require("url"));
-function readProxyFromEnv() {
-    const env = process.env;
-    const http = env.HTTPS_PROXY || env.https_proxy ||
-        env.HTTP_PROXY || env.http_proxy ||
-        env.npm_config_https_proxy || env.npm_config_proxy || env.npm_config_http_proxy || undefined;
-    const https = env.HTTPS_PROXY || env.https_proxy ||
-        env.npm_config_https_proxy || http || undefined;
-    const noProxy = env.NO_PROXY || env.no_proxy || undefined;
-    return { http, https, noProxy };
-}
-function isBypassedByNoProxy(targetUrl, noProxy) {
-    if (!noProxy)
-        return false;
-    try {
-        const { hostname } = new url.URL(targetUrl);
-        return noProxy
-            .split(',')
-            .map(s => s.trim().toLowerCase())
-            .filter(Boolean)
-            .some(rule => hostname.toLowerCase().endsWith(rule.startsWith('.') ? rule.slice(1) : rule));
-    }
-    catch (_a) {
-        return false;
-    }
-}
-function getProxyAgentFor(targetUrl) {
-    // Somente no Windows
-    if (process.platform !== 'win32')
-        return undefined;
-    const { http, https, noProxy } = readProxyFromEnv();
-    if (isBypassedByNoProxy(targetUrl, noProxy))
-        return undefined;
-    let parsed;
-    try {
-        parsed = new url.URL(targetUrl);
-    }
-    catch (_a) {
-        return undefined;
-    }
-    if (parsed.protocol === 'https:' && https)
-        return new https_proxy_agent_1.HttpsProxyAgent(https);
-    if (parsed.protocol === 'http:' && http)
-        return new http_proxy_agent_1.HttpProxyAgent(http);
-    return undefined;
-}
-// Mantém node-fetch, só injeta o agent quando for Windows + proxy
-function fetchWithProxy(target, init = {}) {
-    const agent = getProxyAgentFor(target);
-    const finalInit = agent ? Object.assign(Object.assign({}, init), { agent }) : init;
-    return (0, node_fetch_1.default)(target, finalInit);
-}
+const zephyrPanel_1 = require("./panel/zephyrPanel");
+const backendPanel_1 = require("./panel/backendPanel");
+const settingsPanel_1 = require("./panel/settingsPanel");
 let globalToken = null;
 let globalThreadId = null;
 function activate(context) {
@@ -108,31 +54,31 @@ function activate(context) {
         context.subscriptions.push(vscode.window.registerWebviewViewProvider('homeView', // << TEM QUE BATER COM O ID DO `package.json`
         homeViewProvider));
         console.log('✅ HomeViewProvider registrada.');
-        // Garante que a extensão esteja visível e com foco na home
+        // O foco da visualização deve ser feito manualmente ou em resposta a um comando.
         yield vscode.commands.executeCommand('workbench.view.extension.formSidebar');
         yield vscode.commands.executeCommand('homeView.focus', { preserveFocus: true });
-        // Comando para abrir o painel Jira
+        // Registro dos comandos
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.openJira', () => {
             jiraPanel_1.JiraPanel.createOrShow(context.extensionUri);
         }));
-        // Comando para abrir o painel Zephyr
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.openZephyr', (issueId, issueKey, comentario, description, bddSpecification) => {
-            // Monta comentário se não vier preenchido
             if (!comentario) {
                 comentario = `Descrição:\n${description}\n\nEspecificação BDD:\n${bddSpecification}`;
             }
             zephyrPanel_1.ZephyrPanel.createOrShow(context.extensionUri, issueId, issueKey, comentario);
         }));
-        // Comando para abrir o painel Backend
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.backend', () => {
             backendPanel_1.BackendPanel.createOrShow(context.extensionUri);
         }));
-        // Comando para obter o nome do usuário logado
+        context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.settings', () => {
+            settingsPanel_1.SettingsPanel.createOrShow(context.extensionUri);
+        }));
+        // Comando para obter o nome do usuário logado no Jira
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.getJiraUser', () => __awaiter(this, void 0, void 0, function* () {
             const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
             const auth = encodeAuth(jiraEmail, jiraToken);
             try {
-                const response = yield fetchWithProxy(`https://${jiraDomain}/rest/api/2/myself`, {
+                const response = yield (0, node_fetch_1.default)(`https://${jiraDomain}/rest/api/2/myself`, {
                     headers: {
                         'Authorization': `Basic ${auth}`,
                         'Accept': 'application/json',
@@ -146,24 +92,28 @@ function activate(context) {
                 return 'usuário';
             }
         })));
-        // Comando para obter a lista de projetos
+        // Projetos Jira (exemplo com filtro fixo que você usa)
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.getJiraProjects', () => __awaiter(this, void 0, void 0, function* () {
             const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
             const auth = encodeAuth(jiraEmail, jiraToken);
             try {
-                // const response = await fetchWithProxy(`https://${jiraDomain}/rest/api/3/project/search?categoryId=10018`, {
+                // const response = await fetch(`https://${jiraDomain}/rest/api/3/project/search?categoryId=10018`, {
                 const response = yield (0, node_fetch_1.default)(`https://${jiraDomain}/rest/api/3/project`, {
+                    method: 'GET',
                     headers: {
                         'Authorization': `Basic ${auth}`,
                         'Accept': 'application/json',
                     },
+                    // timeoutMs: 20000,
                 });
+                // const values = Array.isArray(res?.values) ? res.values : [];
+                // return values.map((p: any) => ({ key: p.key, name: p.name }));
                 const data = yield response.json();
                 // return data.values.map((p: any) => ({ key: p.key, name: p.name }));
                 return data.map((p) => ({ key: p.key, name: p.name }));
             }
             catch (err) {
-                vscode.window.showErrorMessage(`Erro ao buscar projetos do Jira: ${err.message}`);
+                vscode.window.showErrorMessage(`Erro ao buscar projetos do Jira: ${(err === null || err === void 0 ? void 0 : err.message) || err}`);
                 return [];
             }
         })));
@@ -176,7 +126,7 @@ function activate(context) {
                 body: comentario,
             });
             try {
-                const response = yield fetchWithProxy(url, {
+                const response = yield (0, node_fetch_1.default)(url, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Basic ${auth}`,
@@ -196,31 +146,77 @@ function activate(context) {
             }
         })));
         // 🔍 Comando para buscar sugestões de issues com base no summary
-        context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.buscarSugestoesIssue', (keyPrefix, projectKey) => __awaiter(this, void 0, void 0, function* () {
+        context.subscriptions.push(
+        // vscode.commands.registerCommand('plugin-vscode.buscarSugestoesIssue', async (keyPrefix: string, projectKey: string) => {
+        //   const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
+        //   const auth = encodeAuth(jiraEmail, jiraToken);
+        //   // const jql = `
+        //   //   project = ${projectKey}
+        //   //   AND summary ~ "${keyPrefix}*"
+        //   //   AND issuetype IN ("Functionality", "Epic", "Story")
+        //   //   ORDER BY updated DESC
+        //   // `;
+        //   // const url = `https://${jiraDomain}/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=5&fields=key,summary`;
+        //   const term = (keyPrefix || '').trim();
+        //   const isIssueKey = /^[A-Z][A-Z0-9_]*-\d+$/i.test(term);
+        //   // Se digitar uma chave, busca direto pela KEY
+        //   const jql = isIssueKey
+        //     ? `key = "${term.toUpperCase()}"`
+        //     : [
+        //         projectKey ? `project = ${projectKey}` : null,
+        //         `(summary ~ "${term}*" OR text ~ "${term}*")`,
+        //         `issuetype IN ("Functionality", "Epic", "Story")`
+        //       ].filter(Boolean).join(' AND ') + ' ORDER BY updated DESC';
+        //   const url = `https://${jiraDomain}/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=5&fields=key,summary`;
+        //   try {
+        //     const response = await fetch(url, {
+        //       headers: {
+        //         'Authorization': `Basic ${auth}`,
+        //         'Accept': 'application/json',
+        //       },
+        //     });
+        //     const json = await response.json();
+        //     return (json.issues || []).map((issue: any) => ({
+        //       key: issue.key,
+        //       summary: issue.fields.summary,
+        //     }));
+        //   } catch (err: any) {
+        //     vscode.window.showErrorMessage(`Erro ao buscar issues do Jira: ${err.message}`);
+        //     return [];
+        //   }
+        // })
+        vscode.commands.registerCommand('plugin-vscode.buscarSugestoesIssue', (texto, projectKey) => __awaiter(this, void 0, void 0, function* () {
             const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
             const auth = encodeAuth(jiraEmail, jiraToken);
-            const jql = `
-        project = ${projectKey}
-        AND summary ~ "${keyPrefix}*"
-        AND issuetype IN ("Functionality", "Epic", "Story")
-        ORDER BY updated DESC
-      `;
-            const url = `https://${jiraDomain}/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=5&fields=key,summary`;
+            const term = (texto || '').trim();
+            const isFullKey = /^[A-Z][A-Z0-9_]*-\d+$/i.test(term);
             try {
-                const response = yield fetchWithProxy(url, {
-                    headers: {
-                        'Authorization': `Basic ${auth}`,
-                        'Accept': 'application/json',
-                    },
-                });
-                const json = yield response.json();
-                return (json.issues || []).map((issue) => ({
-                    key: issue.key,
-                    summary: issue.fields.summary,
-                }));
+                if (isFullKey) {
+                    // match exato quando a pessoa digita a chave completa
+                    const jql = `key = "${term.toUpperCase()}"`;
+                    const url = `https://${jiraDomain}/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=5&fields=key,summary`;
+                    const res = yield (0, node_fetch_1.default)(url, { headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' } });
+                    const json = yield res.json();
+                    return (json.issues || []).map((i) => ({ key: i.key, summary: i.fields.summary || '' }));
+                }
+                else {
+                    // sugestões por prefixo de chave OU por trecho do título (parcial)
+                    const currentJQL = projectKey ? `project = ${projectKey}` : '';
+                    const url = `https://${jiraDomain}/rest/api/2/issue/picker` +
+                        `?query=${encodeURIComponent(term)}` +
+                        (currentJQL ? `&currentJQL=${encodeURIComponent(currentJQL)}` : '');
+                    const res = yield (0, node_fetch_1.default)(url, { headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' } });
+                    const data = yield res.json();
+                    const issues = ((data === null || data === void 0 ? void 0 : data.sections) || []).flatMap((s) => s.issues || []);
+                    return issues.slice(0, 10).map((i) => ({
+                        key: i.key,
+                        // algumas instâncias retornam summary/summaryText/label — usamos o que vier
+                        summary: i.summary || i.summaryText || i.label || ''
+                    }));
+                }
             }
             catch (err) {
-                vscode.window.showErrorMessage(`Erro ao buscar issues do Jira: ${err.message}`);
+                vscode.window.showErrorMessage(`Erro ao buscar sugestões do Jira: ${err.message}`);
                 return [];
             }
         })));
@@ -232,7 +228,7 @@ function activate(context) {
             const auth = encodeAuth(jiraEmail, jiraToken);
             const url = `https://${jiraDomain}/rest/api/2/issue/${issueKey}`;
             try {
-                const response = yield fetchWithProxy(url, {
+                const response = yield (0, node_fetch_1.default)(url, {
                     headers: {
                         'Authorization': `Basic ${auth}`,
                         'Accept': 'application/json',
@@ -277,7 +273,7 @@ function activate(context) {
             // Buscar testes vinculados no Zephyr
             let zephyrData = { values: [] };
             try {
-                const zephyrRes = yield fetchWithProxy(url, {
+                const zephyrRes = yield (0, node_fetch_1.default)(url, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Bearer ${zephyrToken}`,
@@ -297,13 +293,13 @@ function activate(context) {
                 const scripts = [];
                 for (const test of testcases) {
                     try {
-                        const scriptRes = yield fetchWithProxy(`https://${zephyrDomain}/v2/testcases/${test.key}/testscript`, {
+                        const scriptRes = yield (0, node_fetch_1.default)(`https://${zephyrDomain}/v2/testcases/${test.key}/testscript`, {
                             headers: {
                                 Authorization: `Bearer ${zephyrToken}`,
                                 Accept: 'application/json',
                             }
                         });
-                        const scriptDetails = yield fetchWithProxy(`https://${zephyrDomain}/v2/testcases/${test.key}`, {
+                        const scriptDetails = yield (0, node_fetch_1.default)(`https://${zephyrDomain}/v2/testcases/${test.key}`, {
                             headers: {
                                 Authorization: `Bearer ${zephyrToken}`,
                                 Accept: 'application/json',
@@ -362,7 +358,7 @@ function activate(context) {
             const auth = encodeAuth(jiraEmail, jiraToken);
             const url = `https://${jiraDomain}/rest/api/2/issue/${issueKey}`;
             try {
-                const response = yield fetchWithProxy(url, {
+                const response = yield (0, node_fetch_1.default)(url, {
                     headers: {
                         'Authorization': `Basic ${auth}`,
                         'Accept': 'application/json',
@@ -375,7 +371,7 @@ function activate(context) {
                 // Buscar testes vinculados no Zephyr
                 let zephyrData = { values: [] };
                 try {
-                    const zephyrRes = yield fetchWithProxy(`https://${zephyrDomain}/v2/issuelinks/${issueKey}/testcases`, {
+                    const zephyrRes = yield (0, node_fetch_1.default)(`https://${zephyrDomain}/v2/issuelinks/${issueKey}/testcases`, {
                         method: 'GET',
                         headers: {
                             'Authorization': `Bearer ${zephyrToken}`,
@@ -395,7 +391,7 @@ function activate(context) {
                     const scripts = [];
                     for (const test of testcases) {
                         try {
-                            const scriptRes = yield fetchWithProxy(`https://${zephyrDomain}/v2/testcases/${test.key}/testscript`, {
+                            const scriptRes = yield (0, node_fetch_1.default)(`https://${zephyrDomain}/v2/testcases/${test.key}/testscript`, {
                                 headers: {
                                     Authorization: `Bearer ${zephyrToken}`,
                                     Accept: 'application/json',
@@ -517,7 +513,7 @@ function activate(context) {
             }
         }));
         // ✅ Novo comando: Criar test case no Zephyr
-        vscode.commands.registerCommand('plugin-vscode.criarTesteZephyr', (texto, issueId, issueKey, automationStatus, testClass, testType, testGroup, folderId) => __awaiter(this, void 0, void 0, function* () {
+        context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.criarTesteZephyr', (texto, issueId, issueKey, automationStatus, testClass, testType, testGroup, folderId) => __awaiter(this, void 0, void 0, function* () {
             const { zephyrOwnerId, zephyrToken, zephyrDomain } = getZephyrSettings();
             const url = `https://${zephyrDomain}/v2/testcases`;
             console.log('🔍 issueId: ', issueId);
@@ -531,7 +527,7 @@ function activate(context) {
             let zephyrData = { values: [] };
             let zephyrScriptData = { values: [] };
             try {
-                const zephyrRes = yield fetchWithProxy(url, {
+                const zephyrRes = yield (0, node_fetch_1.default)(url, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${zephyrToken}`,
@@ -566,7 +562,7 @@ function activate(context) {
             const semPrimeira = texto.split('\n').slice(1).join('\n');
             console.log('🔍 Texto:', semPrimeira);
             try {
-                const zephyrLink = yield fetchWithProxy(`${url}/${zephyrData.key}/links/issues`, {
+                const zephyrLink = yield (0, node_fetch_1.default)(`${url}/${zephyrData.key}/links/issues`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${zephyrToken}`,
@@ -585,7 +581,7 @@ function activate(context) {
                 console.warn('Erro ao buscar testes no Zephyr:', zephyrErr.message);
             }
             try {
-                const zephyrRes = yield fetchWithProxy(`${url}/${zephyrData.key}/testscript`, {
+                const zephyrRes = yield (0, node_fetch_1.default)(`${url}/${zephyrData.key}/testscript`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${zephyrToken}`,
@@ -603,7 +599,7 @@ function activate(context) {
             catch (zephyrErr) {
                 console.warn('Erro ao buscar testes no Zephyr:', zephyrErr.message);
             }
-        }));
+        })));
         // ✅ Novo comando: Criar test case no Zephyr
         vscode.commands.registerCommand('plugin-vscode.atualizarTesteZephyr', (key, texto, issueId, issueKey) => __awaiter(this, void 0, void 0, function* () {
             const { zephyrOwnerId, zephyrToken, zephyrDomain } = getZephyrSettings();
@@ -617,7 +613,7 @@ function activate(context) {
             const semPrimeira = texto.split('\n').slice(1).join('\n');
             console.log('🔍 Texto:', semPrimeira);
             try {
-                const zephyrRes = yield fetchWithProxy(`${url}/${key}/testscript`, {
+                const zephyrRes = yield (0, node_fetch_1.default)(`${url}/${key}/testscript`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${zephyrToken}`,
@@ -647,7 +643,7 @@ function activate(context) {
             try {
                 while (!isLast) {
                     const url = `https://${zephyrDomain}/v2/folders?maxResults=${maxResults}&startAt=${startAt}&projectKey=${projectKey}&folderType=TEST_CASE`;
-                    const zephyrRes = yield fetchWithProxy(url, {
+                    const zephyrRes = yield (0, node_fetch_1.default)(url, {
                         headers: {
                             'Authorization': `Bearer ${zephyrToken}`,
                             'Content-Type': 'application/json',
@@ -678,7 +674,7 @@ exports.activate = activate;
 function criarTokenECriarThread(cookie) {
     return __awaiter(this, void 0, void 0, function* () {
         // Criar token
-        const tokenRes = yield fetchWithProxy(`https://github.com/github-copilot/chat/token`, {
+        const tokenRes = yield (0, node_fetch_1.default)(`https://github.com/github-copilot/chat/token`, {
             method: 'POST',
             headers: {
                 'accept': 'application/json',
@@ -698,7 +694,7 @@ function criarTokenECriarThread(cookie) {
         const token = tokenData.token;
         console.log('🔍 Copilot token:', JSON.stringify(token, null, 2));
         // Criar thread
-        const threadRes = yield fetchWithProxy(`https://api.business.githubcopilot.com/github/chat/threads`, {
+        const threadRes = yield (0, node_fetch_1.default)(`https://api.business.githubcopilot.com/github/chat/threads`, {
             method: 'POST',
             headers: {
                 'authorization': `GitHub-Bearer ${token}`,
@@ -725,7 +721,11 @@ function enviarCriarCenarioComCopilot(token, threadId, userStory, cenarioOrigina
             content: `Com base na análise da user story abaixo, crie cenários de testes e realize as seguintes ações:
                     1. Classifique o tipo do teste criado (**Test Type**): escolha entre *End to End*, *Regression*, *Acceptance* ou *UI*.  
                     2. Classifique o cenário como **Test Class**: *Positive* ou *Negative*.  
-                    3. Classifique o cenário como **Test Group**: *Backend*, *Front-End* ou *Desktop*.    
+                    3. Classifique o cenário como **Test Group**: *Backend*, *Front-End* ou *Desktop*.
+                       ⚠️ Importante: os campos acima devem ser retornados exatamente como exemplo:
+                      **Test Type:** Acceptance  
+                      **Test Class:** Positive  
+                      **Test Group:** Front-End  
                     4. Avalie se o cenário cobre o comportamento esperado da user story.  
                     5. Aponte se há pontos técnicos ou termos inadequados para testes de aceitação.  
                     6. Reescreva o cenário utilizando **boas práticas do Gherkin com as palavras-chave em inglês** (Scenario, Given, And, When, Then)mantendo o cenário em portugues**, evitando qualquer linguagem técnica ou de implementação (como Postman, status HTTP, payloads, tabelas do banco, etc). 
@@ -738,8 +738,7 @@ function enviarCriarCenarioComCopilot(token, threadId, userStory, cenarioOrigina
                       \`\`\`  
                     7. O novo cenário deve estar orientado a **comportamento do usuário** ou do sistema, com clareza, valor de negócio e sem ambiguidade.
                     ---
-                    📝 **User Story Analisada:**  
-                    ${userStory}`,
+                    📝 **User Story Analisada:** ${userStory}`,
             intent: 'conversation',
             references: [],
             context: [],
@@ -754,7 +753,7 @@ function enviarCriarCenarioComCopilot(token, threadId, userStory, cenarioOrigina
             mediaContent: [],
             skillOptions: { deepCodeSearch: false }
         };
-        const sendMsgRes = yield fetchWithProxy(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
+        const sendMsgRes = yield (0, node_fetch_1.default)(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
             method: 'POST',
             headers: {
                 'authorization': `GitHub-Bearer ${token}`,
@@ -766,7 +765,7 @@ function enviarCriarCenarioComCopilot(token, threadId, userStory, cenarioOrigina
             throw new Error(`Erro ao enviar cenário: ${sendMsgRes.status}`);
         }
         yield new Promise(r => setTimeout(r, 1000));
-        const messagesRes = yield fetchWithProxy(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
+        const messagesRes = yield (0, node_fetch_1.default)(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
             method: 'GET',
             headers: {
                 'authorization': `GitHub-Bearer ${token}`,
@@ -794,11 +793,9 @@ function enviarCenarioParaCopilot(token, threadId, userStory, cenarioOriginal) {
                     4. Reescreva o cenário utilizando **boas práticas do Gherkin com as palavras-chave em inglês** (Scenario, Given, And, When, Then) mantendo o cenário em portugues**, evitando qualquer linguagem técnica ou de implementação (como Postman, status HTTP, payloads, tabelas do banco, etc).  
                     5. O novo cenário deve estar orientado a **comportamento do usuário** ou do sistema, com clareza, valor de negócio e sem ambiguidade.
                     ---
-                    📝 **User Story Analisada:**  
-                    ${userStory}
+                    📝 **User Story Analisada:** ${userStory}
                     ---
-                    🧪 **Cenário de Teste Original:**  
-                    ${cenarioOriginal}`,
+                    🧪 **Cenário de Teste Original:** ${cenarioOriginal}`,
             intent: 'conversation',
             references: [],
             context: [],
@@ -813,7 +810,7 @@ function enviarCenarioParaCopilot(token, threadId, userStory, cenarioOriginal) {
             mediaContent: [],
             skillOptions: { deepCodeSearch: false }
         };
-        const sendMsgRes = yield fetchWithProxy(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
+        const sendMsgRes = yield (0, node_fetch_1.default)(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
             method: 'POST',
             headers: {
                 'authorization': `GitHub-Bearer ${token}`,
@@ -825,7 +822,7 @@ function enviarCenarioParaCopilot(token, threadId, userStory, cenarioOriginal) {
             throw new Error(`Erro ao enviar cenário: ${sendMsgRes.status}`);
         }
         yield new Promise(r => setTimeout(r, 1000));
-        const messagesRes = yield fetchWithProxy(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
+        const messagesRes = yield (0, node_fetch_1.default)(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
             method: 'GET',
             headers: {
                 'authorization': `GitHub-Bearer ${token}`,
@@ -870,7 +867,7 @@ function analiseStoryEpicFunCopilot(token, threadId, description, bdd) {
             mediaContent: [],
             skillOptions: { deepCodeSearch: false }
         };
-        const sendMsgRes = yield fetchWithProxy(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
+        const sendMsgRes = yield (0, node_fetch_1.default)(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
             method: 'POST',
             headers: {
                 'authorization': `GitHub-Bearer ${token}`,
@@ -882,7 +879,7 @@ function analiseStoryEpicFunCopilot(token, threadId, description, bdd) {
             throw new Error(`Erro ao enviar cenário: ${sendMsgRes.status}`);
         }
         yield new Promise(r => setTimeout(r, 1000));
-        const messagesRes = yield fetchWithProxy(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
+        const messagesRes = yield (0, node_fetch_1.default)(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
             method: 'GET',
             headers: {
                 'authorization': `GitHub-Bearer ${token}`,

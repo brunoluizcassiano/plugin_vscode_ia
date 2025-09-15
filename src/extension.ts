@@ -1,117 +1,63 @@
 import fetch from 'node-fetch';
 import * as vscode from 'vscode';
 import { HomeViewProvider } from './homeViewProvider';
-import { BackendPanel } from './panel/backendPanel';
-import { ZephyrPanel } from './panel/zephyrPanel';
 import { JiraPanel } from './panel/jiraPanel';
-
-// 🔌 PROXY APENAS NO WINDOWS
-import { HttpsProxyAgent } from 'https-proxy-agent';
-import { HttpProxyAgent } from 'http-proxy-agent';
-import * as url from 'url';
-
-function readProxyFromEnv(): { http?: string; https?: string; noProxy?: string } {
-  const env = process.env;
-  const http =
-    env.HTTPS_PROXY || env.https_proxy ||
-    env.HTTP_PROXY || env.http_proxy ||
-    env.npm_config_https_proxy || env.npm_config_proxy || env.npm_config_http_proxy || undefined;
-
-  const https =
-    env.HTTPS_PROXY || env.https_proxy ||
-    env.npm_config_https_proxy || http || undefined;
-
-  const noProxy = env.NO_PROXY || env.no_proxy || undefined;
-
-  return { http, https, noProxy };
-}
-
-function isBypassedByNoProxy(targetUrl: string, noProxy?: string): boolean {
-  if (!noProxy) return false;
-  try {
-    const { hostname } = new url.URL(targetUrl);
-    return noProxy
-      .split(',')
-      .map(s => s.trim().toLowerCase())
-      .filter(Boolean)
-      .some(rule => hostname.toLowerCase().endsWith(rule.startsWith('.') ? rule.slice(1) : rule));
-  } catch {
-    return false;
-  }
-}
-
-function getProxyAgentFor(targetUrl: string) {
-  // Somente no Windows
-  if (process.platform !== 'win32') return undefined;
-  const { http, https, noProxy } = readProxyFromEnv();
-  if (isBypassedByNoProxy(targetUrl, noProxy)) return undefined;
-
-  let parsed: URL;
-  try {
-    parsed = new url.URL(targetUrl);
-  } catch {
-    return undefined;
-  }
-
-  if (parsed.protocol === 'https:' && https) return new HttpsProxyAgent(https);
-  if (parsed.protocol === 'http:' && http) return new HttpProxyAgent(http);
-  return undefined;
-}
-
-// Mantém node-fetch, só injeta o agent quando for Windows + proxy
-function fetchWithProxy(target: string, init: any = {}) {
-  const agent = getProxyAgentFor(target);
-  const finalInit = agent ? { ...init, agent } : init;
-  return fetch(target, finalInit);
-}
-
-let globalToken: string | null = null;
-let globalThreadId: string | null = null;
-
-export async function activate(context: vscode.ExtensionContext) {
+import { ZephyrPanel } from './panel/zephyrPanel';
+import { BackendPanel } from './panel/backendPanel';
+import { SettingsPanel } from './panel/settingsPanel';
+ 
+ let globalToken: string | null = null;
+ let globalThreadId: string | null = null;
+ 
+ export async function activate(context: vscode.ExtensionContext) {
   console.log('✅ Plugin "Form Plugin" está sendo ativado...');
-    // Criação da instância da HomeViewProvider
-    const homeViewProvider = new HomeViewProvider(context.extensionUri);
-    // Registro da webview com o ID que deve coincidir com o package.json
-    context.subscriptions.push(
-      vscode.window.registerWebviewViewProvider(
-        'homeView', // << TEM QUE BATER COM O ID DO `package.json`
-        homeViewProvider
-      )
-    );
-    console.log('✅ HomeViewProvider registrada.');
-  // Garante que a extensão esteja visível e com foco na home
+  // Criação da instância da HomeViewProvider
+  const homeViewProvider = new HomeViewProvider(context.extensionUri);
+  // Registro da webview com o ID que deve coincidir com o package.json
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(
+      'homeView', // << TEM QUE BATER COM O ID DO `package.json`
+      homeViewProvider
+    )
+  );
+  console.log('✅ HomeViewProvider registrada.');
+  
+  // O foco da visualização deve ser feito manualmente ou em resposta a um comando.
   await vscode.commands.executeCommand('workbench.view.extension.formSidebar');
   await vscode.commands.executeCommand('homeView.focus', { preserveFocus: true });
-  // Comando para abrir o painel Jira
+  
+   // Registro dos comandos
   context.subscriptions.push(
     vscode.commands.registerCommand('plugin-vscode.openJira', () => {
-      JiraPanel.createOrShow(context.extensionUri);
+       JiraPanel.createOrShow(context.extensionUri);
     })
   );
-  // Comando para abrir o painel Zephyr
-  context.subscriptions.push(
+   context.subscriptions.push(
     vscode.commands.registerCommand('plugin-vscode.openZephyr', (issueId?: string, issueKey?: string, comentario?: string, description?: string, bddSpecification?: string) => {
-      // Monta comentário se não vier preenchido
       if (!comentario) {
         comentario = `Descrição:\n${description}\n\nEspecificação BDD:\n${bddSpecification}`;
       }
       ZephyrPanel.createOrShow(context.extensionUri, issueId, issueKey, comentario);
     })
   );
-  // Comando para abrir o painel Backend
-  context.subscriptions.push(
+   context.subscriptions.push(
     vscode.commands.registerCommand('plugin-vscode.backend', () => {
-      BackendPanel.createOrShow(context.extensionUri);
+       BackendPanel.createOrShow(context.extensionUri);
     })
   );
-  // Comando para obter o nome do usuário logado
+  
+  context.subscriptions.push(
+    vscode.commands.registerCommand('plugin-vscode.settings', () => {
+      SettingsPanel.createOrShow(context.extensionUri);
+    })
+  );
+   // Comando para obter o nome do usuário logado no Jira
   context.subscriptions.push(
     vscode.commands.registerCommand('plugin-vscode.getJiraUser', async () => {
       const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
       const auth = encodeAuth(jiraEmail, jiraToken);
       try {
-        const response = await fetchWithProxy(`https://${jiraDomain}/rest/api/2/myself`, {
+        const response = await fetch(`https://${jiraDomain}/rest/api/2/myself`, {
           headers: {
             'Authorization': `Basic ${auth}`,
             'Accept': 'application/json',
@@ -125,29 +71,35 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     })
   );
-  // Comando para obter a lista de projetos
+  
+   // Projetos Jira (exemplo com filtro fixo que você usa)
   context.subscriptions.push(
     vscode.commands.registerCommand('plugin-vscode.getJiraProjects', async () => {
       const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
       const auth = encodeAuth(jiraEmail, jiraToken);
       try {
-        // const response = await fetchWithProxy(`https://${jiraDomain}/rest/api/3/project/search?categoryId=10018`, {
+        // const response = await fetch(`https://${jiraDomain}/rest/api/3/project/search?categoryId=10018`, {
         const response = await fetch(`https://${jiraDomain}/rest/api/3/project`, {
+          method: 'GET',
           headers: {
             'Authorization': `Basic ${auth}`,
             'Accept': 'application/json',
           },
+          // timeoutMs: 20000,
         });
+        // const values = Array.isArray(res?.values) ? res.values : [];
+        // return values.map((p: any) => ({ key: p.key, name: p.name }));
         const data = await response.json();
         // return data.values.map((p: any) => ({ key: p.key, name: p.name }));
         return data.map((p: any) => ({ key: p.key, name: p.name }));
       } catch (err: any) {
-        vscode.window.showErrorMessage(`Erro ao buscar projetos do Jira: ${err.message}`);
+        vscode.window.showErrorMessage(`Erro ao buscar projetos do Jira: ${err?.message || err}`);
         return [];
       }
     })
   );
-  // ✅ Método para enviar comentário para a issue:
+
+   // ✅ Método para enviar comentário para a issue:
   context.subscriptions.push(
     vscode.commands.registerCommand('plugin-vscode.enviarComentarioIssue', async (issueKey: string, comentario: string) => {
       const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
@@ -157,7 +109,7 @@ export async function activate(context: vscode.ExtensionContext) {
         body: comentario,
       });
       try {
-        const response = await fetchWithProxy(url, {
+        const response = await fetch(url, {
           method: 'POST',
           headers: {
             'Authorization': `Basic ${auth}`,
@@ -176,37 +128,92 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     })
   );
-  // 🔍 Comando para buscar sugestões de issues com base no summary
+   // 🔍 Comando para buscar sugestões de issues com base no summary
   context.subscriptions.push(
-    vscode.commands.registerCommand('plugin-vscode.buscarSugestoesIssue', async (keyPrefix: string, projectKey: string) => {
-      const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
-      const auth = encodeAuth(jiraEmail, jiraToken);
-      const jql = `
-        project = ${projectKey}
-        AND summary ~ "${keyPrefix}*"
-        AND issuetype IN ("Functionality", "Epic", "Story")
-        ORDER BY updated DESC
-      `;
+    // vscode.commands.registerCommand('plugin-vscode.buscarSugestoesIssue', async (keyPrefix: string, projectKey: string) => {
+    //   const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
+    //   const auth = encodeAuth(jiraEmail, jiraToken);
+      
+    //   // const jql = `
+    //   //   project = ${projectKey}
+    //   //   AND summary ~ "${keyPrefix}*"
+    //   //   AND issuetype IN ("Functionality", "Epic", "Story")
+    //   //   ORDER BY updated DESC
+    //   // `;
+    //   // const url = `https://${jiraDomain}/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=5&fields=key,summary`;
+      
+    //   const term = (keyPrefix || '').trim();
+    //   const isIssueKey = /^[A-Z][A-Z0-9_]*-\d+$/i.test(term);
+
+    //   // Se digitar uma chave, busca direto pela KEY
+    //   const jql = isIssueKey
+    //     ? `key = "${term.toUpperCase()}"`
+    //     : [
+    //         projectKey ? `project = ${projectKey}` : null,
+    //         `(summary ~ "${term}*" OR text ~ "${term}*")`,
+    //         `issuetype IN ("Functionality", "Epic", "Story")`
+    //       ].filter(Boolean).join(' AND ') + ' ORDER BY updated DESC';
+
+    //   const url = `https://${jiraDomain}/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=5&fields=key,summary`;
+
+    //   try {
+    //     const response = await fetch(url, {
+    //       headers: {
+    //         'Authorization': `Basic ${auth}`,
+    //         'Accept': 'application/json',
+    //       },
+    //     });
+    //     const json = await response.json();
+    //     return (json.issues || []).map((issue: any) => ({
+    //       key: issue.key,
+    //       summary: issue.fields.summary,
+    //     }));
+    //   } catch (err: any) {
+    //     vscode.window.showErrorMessage(`Erro ao buscar issues do Jira: ${err.message}`);
+    //     return [];
+    //   }
+    // })
+    vscode.commands.registerCommand('plugin-vscode.buscarSugestoesIssue', async (texto: string, projectKey?: string) => {
+  const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
+  const auth = encodeAuth(jiraEmail, jiraToken);
+  const term = (texto || '').trim();
+
+  const isFullKey = /^[A-Z][A-Z0-9_]*-\d+$/i.test(term);
+
+  try {
+    if (isFullKey) {
+      // match exato quando a pessoa digita a chave completa
+      const jql = `key = "${term.toUpperCase()}"`;
       const url = `https://${jiraDomain}/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=5&fields=key,summary`;
-      try {
-        const response = await fetchWithProxy(url, {
-          headers: {
-            'Authorization': `Basic ${auth}`,
-            'Accept': 'application/json',
-          },
-        });
-        const json = await response.json();
-        return (json.issues || []).map((issue: any) => ({
-          key: issue.key,
-          summary: issue.fields.summary,
-        }));
-      } catch (err: any) {
-        vscode.window.showErrorMessage(`Erro ao buscar issues do Jira: ${err.message}`);
-        return [];
-      }
-    })
+      const res = await fetch(url, { headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' } });
+      const json = await res.json();
+      return (json.issues || []).map((i: any) => ({ key: i.key, summary: i.fields.summary || '' }));
+    } else {
+      // sugestões por prefixo de chave OU por trecho do título (parcial)
+      const currentJQL = projectKey ? `project = ${projectKey}` : '';
+      const url =
+        `https://${jiraDomain}/rest/api/2/issue/picker` +
+        `?query=${encodeURIComponent(term)}` +
+        (currentJQL ? `&currentJQL=${encodeURIComponent(currentJQL)}` : '');
+
+      const res = await fetch(url, { headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' } });
+      const data = await res.json();
+
+      const issues = (data?.sections || []).flatMap((s: any) => s.issues || []);
+      return issues.slice(0, 10).map((i: any) => ({
+        key: i.key,
+        // algumas instâncias retornam summary/summaryText/label — usamos o que vier
+        summary: i.summary || i.summaryText || i.label || ''
+      }));
+    }
+  } catch (err: any) {
+    vscode.window.showErrorMessage(`Erro ao buscar sugestões do Jira: ${err.message}`);
+    return [];
+  }
+})
+
   );
-  // ✅ Novo comando: buscar detalhes completos da issue
+   // ✅ Novo comando: buscar detalhes completos da issue
   context.subscriptions.push(
     vscode.commands.registerCommand('plugin-vscode.getJiraIssue', async (issueKey: string) => {
       const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
@@ -214,7 +221,7 @@ export async function activate(context: vscode.ExtensionContext) {
       const auth = encodeAuth(jiraEmail, jiraToken);
       const url = `https://${jiraDomain}/rest/api/2/issue/${issueKey}`;
       try {
-        const response = await fetchWithProxy(url, {
+        const response = await fetch(url, {
           headers: {
             'Authorization': `Basic ${auth}`,
             'Accept': 'application/json',
@@ -251,15 +258,15 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     })
   );
-  // ✅ Novo comando: buscar detalhes completos da issue
+   // ✅ Novo comando: buscar detalhes completos da issue
   context.subscriptions.push(
     vscode.commands.registerCommand('plugin-vscode.getZephyrTestToIssue', async (issueKey: string) => {
       const { zephyrToken, zephyrDomain } = getZephyrSettings();
       const url = `https://${zephyrDomain}/v2/issuelinks/${issueKey}/testcases`;
-      // Buscar testes vinculados no Zephyr
+       // Buscar testes vinculados no Zephyr
       let zephyrData: any = { values: [] };
       try {
-        const zephyrRes = await fetchWithProxy(url, {
+        const zephyrRes = await fetch(url, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${zephyrToken}`,
@@ -278,13 +285,13 @@ export async function activate(context: vscode.ExtensionContext) {
         const scripts: any[] = [];
         for (const test of testcases) {
           try {
-            const scriptRes = await fetchWithProxy(`https://${zephyrDomain}/v2/testcases/${test.key}/testscript`, {
+            const scriptRes = await fetch(`https://${zephyrDomain}/v2/testcases/${test.key}/testscript`, {
               headers: {
                 Authorization: `Bearer ${zephyrToken}`,
                 Accept: 'application/json',
               }
             });
-            const scriptDetails = await fetchWithProxy(`https://${zephyrDomain}/v2/testcases/${test.key}`, {
+            const scriptDetails = await fetch(`https://${zephyrDomain}/v2/testcases/${test.key}`, {
               headers: {
                 Authorization: `Bearer ${zephyrToken}`,
                 Accept: 'application/json',
@@ -335,7 +342,7 @@ export async function activate(context: vscode.ExtensionContext) {
       };
     })
   );
-  // ✅ Novo comando: buscar detalhes completos da issue
+   // ✅ Novo comando: buscar detalhes completos da issue
   context.subscriptions.push(
     vscode.commands.registerCommand('plugin-vscode.getJiraIssueDetails', async (issueKey: string) => {
       const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
@@ -343,7 +350,7 @@ export async function activate(context: vscode.ExtensionContext) {
       const auth = encodeAuth(jiraEmail, jiraToken);
       const url = `https://${jiraDomain}/rest/api/2/issue/${issueKey}`;
       try {
-        const response = await fetchWithProxy(url, {
+        const response = await fetch(url, {
           headers: {
             'Authorization': `Basic ${auth}`,
             'Accept': 'application/json',
@@ -355,7 +362,7 @@ export async function activate(context: vscode.ExtensionContext) {
         // Buscar testes vinculados no Zephyr
         let zephyrData: any = { values: [] };
         try {
-          const zephyrRes = await fetchWithProxy(`https://${zephyrDomain}/v2/issuelinks/${issueKey}/testcases`, {
+          const zephyrRes = await fetch(`https://${zephyrDomain}/v2/issuelinks/${issueKey}/testcases`, {
             method: 'GET',
             headers: {
               'Authorization': `Bearer ${zephyrToken}`,
@@ -374,7 +381,7 @@ export async function activate(context: vscode.ExtensionContext) {
           const scripts: any[] = [];
           for (const test of testcases) {
             try {
-              const scriptRes = await fetchWithProxy(`https://${zephyrDomain}/v2/testcases/${test.key}/testscript`, {
+              const scriptRes = await fetch(`https://${zephyrDomain}/v2/testcases/${test.key}/testscript`, {
                 headers: {
                   Authorization: `Bearer ${zephyrToken}`,
                   Accept: 'application/json',
@@ -428,7 +435,7 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     })
   );
-  // 🔍 Análise Story, Epic e Func com IA QA (Copilot)
+   // 🔍 Análise Story, Epic e Func com IA QA (Copilot)
   vscode.commands.registerCommand('plugin-vscode.analiseIaQa', async (description: string, bdd: string) => {
     const { copilotCookie } = getCopilotSettings();
     try {
@@ -448,7 +455,7 @@ export async function activate(context: vscode.ExtensionContext) {
       return '❌ Erro ao obter resposta da IA.';
     }
   });
-  // 🔍 Análise cenarios com IA QA (Copilot)
+   // 🔍 Análise cenarios com IA QA (Copilot)
   vscode.commands.registerCommand('plugin-vscode.analiseCenariosIaQa', async (userStory: string, cenario: string) => {
     const { copilotCookie } = getCopilotSettings();
     try {
@@ -468,7 +475,7 @@ export async function activate(context: vscode.ExtensionContext) {
       return '❌ Erro ao obter resposta da IA.';
     }
   });
-  // 🔍 Criar cenarios com IA QA (Copilot)
+   // 🔍 Criar cenarios com IA QA (Copilot)
   vscode.commands.registerCommand('plugin-vscode.criarCenariosIaQa', async (userStory: string, cenario: string) => {
     const { copilotCookie } = getCopilotSettings();
     try {
@@ -488,119 +495,118 @@ export async function activate(context: vscode.ExtensionContext) {
       return '❌ Erro ao obter resposta da IA.';
     }
   });
-  // ✅ Novo comando: Criar test case no Zephyr
-  vscode.commands.registerCommand('plugin-vscode.criarTesteZephyr', async (
-    texto: string,
-    issueId: string,
-    issueKey: string,
-    automationStatus: string,
-    testClass: string,
-    testType: string,
-    testGroup: string,
-    folderId: number) => {
-    const { zephyrOwnerId, zephyrToken, zephyrDomain } = getZephyrSettings();
-    const url = `https://${zephyrDomain}/v2/testcases`;
-    console.log('🔍 issueId: ', issueId);
-    console.log('🔍 titulo do teste: ', texto.split('\n')[0].replace(/^Scenario:/i, '').trim());
-    console.log('🔍 projectKey: ', issueKey);
-    console.log('🔍 automationStatus: ', automationStatus.trim().replace(/\s+/g, ' '));
-    console.log('🔍 testClass: ', testClass.trim().replace(/\s+/g, ' '));
-    console.log('🔍 testType: ', testType.trim().replace(/\s+/g, ' '));
-    console.log('🔍 testGroup: ', testGroup.trim().replace(/\s+/g, ' '));
-    // Buscar testes vinculados no Zephyr
-    let zephyrData: any = { values: [] };
-    let zephyrScriptData: any = { values: [] };
-    try {
-      const zephyrRes = await fetchWithProxy(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${zephyrToken}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({
-          name: texto.split('\n')[0].replace(/^Scenario:/i, '').trim(),
-          projectKey: issueKey.slice(0, 4),
-          folderId: folderId,
-          ownerId: zephyrOwnerId,
-          customFields: {
-            "Test Type": testType,
-            "Test Class": testClass,
-            "Automation Status": automationStatus,
-            "Test Group": testGroup
-          }
-        }),
-      });
-      if (zephyrRes.ok) {
-        zephyrData = await zephyrRes.json();
-        console.log('🔍 Dados do zephyr new test case:', JSON.stringify(zephyrData, null, 2));
-      } else {
-        console.log('🔍 zephyrRes: ', zephyrRes);
+   // ✅ Novo comando: Criar test case no Zephyr
+  context.subscriptions.push(
+    vscode.commands.registerCommand('plugin-vscode.criarTesteZephyr', async (
+      texto: string,
+      issueId: string,
+      issueKey: string,
+      automationStatus: string,
+      testClass: string,
+      testType: string,
+      testGroup: string,
+      folderId: number) => {
+      const { zephyrOwnerId, zephyrToken, zephyrDomain } = getZephyrSettings();
+      const url = `https://${zephyrDomain}/v2/testcases`;
+       console.log('🔍 issueId: ', issueId);
+      console.log('🔍 titulo do teste: ', texto.split('\n')[0].replace(/^Scenario:/i, '').trim());
+      console.log('🔍 projectKey: ', issueKey);
+      console.log('🔍 automationStatus: ', automationStatus.trim().replace(/\s+/g, ' '));
+      console.log('🔍 testClass: ', testClass.trim().replace(/\s+/g, ' '));
+      console.log('🔍 testType: ', testType.trim().replace(/\s+/g, ' '));
+      console.log('🔍 testGroup: ', testGroup.trim().replace(/\s+/g, ' '));
+       // Buscar testes vinculados no Zephyr
+      let zephyrData: any = { values: [] };
+      let zephyrScriptData: any = { values: [] };
+      try {
+        const zephyrRes = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${zephyrToken}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            name: texto.split('\n')[0].replace(/^Scenario:/i, '').trim(),
+            projectKey: issueKey.slice(0, 4),
+            folderId: folderId,
+            ownerId: zephyrOwnerId,
+            customFields: {
+              "Test Type": testType,
+              "Test Class": testClass,
+              "Automation Status": automationStatus,
+              "Test Group": testGroup
+            }
+          }),
+        });
+        if (zephyrRes.ok) {
+          zephyrData = await zephyrRes.json();
+          console.log('🔍 Dados do zephyr new test case:', JSON.stringify(zephyrData, null, 2));
+        } else {
+          console.log('🔍 zephyrRes: ', zephyrRes);
+        }
+      } catch (zephyrErr: any) {
+        console.warn('Erro ao buscar testes no Zephyr:', zephyrErr.message);
       }
-    } catch (zephyrErr: any) {
-      console.warn('Erro ao buscar testes no Zephyr:', zephyrErr.message);
-    }
-    console.log('🔍 Dados do zephyr:', JSON.stringify(zephyrData, null, 2));
-    const semPrimeira = texto.split('\n').slice(1).join('\n');
-    console.log('🔍 Texto:', semPrimeira);
-    
-    try {
-      const zephyrLink = await fetchWithProxy(`${url}/${zephyrData.key}/links/issues`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${zephyrToken}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({
-          "issueId": issueId
-        }),
-      });
-      const zephyrLinkData = zephyrLink.json()
-      console.log('🔍 issueId:',issueId);
-      console.log('🔍 link:',JSON.stringify(zephyrLinkData, null, 2));
-    } catch (zephyrErr: any) {
-      console.warn('Erro ao buscar testes no Zephyr:', zephyrErr.message);
-    }
-    try {
-      const zephyrRes = await fetchWithProxy(`${url}/${zephyrData.key}/testscript`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${zephyrToken}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({
-          "type": "bdd",
-          "text": semPrimeira
-        }),
-      });
-      zephyrScriptData = zephyrRes.json()
-      return zephyrData.key
-    } catch (zephyrErr: any) {
-      console.warn('Erro ao buscar testes no Zephyr:', zephyrErr.message);
-    }
-  });
-  // ✅ Novo comando: Criar test case no Zephyr
+       console.log('🔍 Dados do zephyr:', JSON.stringify(zephyrData, null, 2));
+      const semPrimeira = texto.split('\n').slice(1).join('\n');
+      console.log('🔍 Texto:', semPrimeira);
+       try {
+        const zephyrLink = await fetch(`${url}/${zephyrData.key}/links/issues`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${zephyrToken}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            "issueId": issueId
+          }),
+        });
+        const zephyrLinkData = zephyrLink.json()
+        console.log('🔍 issueId:', issueId);
+        console.log('🔍 link:', JSON.stringify(zephyrLinkData, null, 2));
+      } catch (zephyrErr: any) {
+        console.warn('Erro ao buscar testes no Zephyr:', zephyrErr.message);
+      }
+       try {
+        const zephyrRes = await fetch(`${url}/${zephyrData.key}/testscript`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${zephyrToken}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            "type": "bdd",
+            "text": semPrimeira
+          }),
+        });
+        zephyrScriptData = zephyrRes.json()
+        return zephyrData.key
+      } catch (zephyrErr: any) {
+        console.warn('Erro ao buscar testes no Zephyr:', zephyrErr.message);
+      }
+    })
+  );
+   // ✅ Novo comando: Criar test case no Zephyr
   vscode.commands.registerCommand('plugin-vscode.atualizarTesteZephyr', async (
     key: string,
     texto: string,
     issueId: string,
     issueKey: string) => {
-    
-    const { zephyrOwnerId, zephyrToken, zephyrDomain } = getZephyrSettings();
+     const { zephyrOwnerId, zephyrToken, zephyrDomain } = getZephyrSettings();
     const url = `https://${zephyrDomain}/v2/testcases`;
-    console.log('🔍 issueId: ', issueId);
+     console.log('🔍 issueId: ', issueId);
     console.log('🔍 titulo do teste: ', texto.split('\n')[0].replace(/^Scenario:/i, '').trim());
     console.log('🔍 projectKey: ', issueKey);
-    // Buscar testes vinculados no Zephyr
+     // Buscar testes vinculados no Zephyr
     let zephyrData: any = { values: [] };
     let zephyrScriptData: any = { values: [] };
-    const semPrimeira = texto.split('\n').slice(1).join('\n');
+     const semPrimeira = texto.split('\n').slice(1).join('\n');
     console.log('🔍 Texto:', semPrimeira);
-    
-    try {
-      const zephyrRes = await fetchWithProxy(`${url}/${key}/testscript`, {
+     try {
+      const zephyrRes = await fetch(`${url}/${key}/testscript`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${zephyrToken}`,
@@ -618,18 +624,18 @@ export async function activate(context: vscode.ExtensionContext) {
       console.warn('Erro ao buscar testes no Zephyr:', zephyrErr.message);
     }
   });
-  // Comando para obter a lista de pastas
+   // Comando para obter a lista de pastas
   vscode.commands.registerCommand('plugin-vscode.getZephyrFolders', async (issueKey: string) => {
     const { zephyrOwnerId, zephyrToken, zephyrDomain } = getZephyrSettings();
-    let startAt = 0;
+     let startAt = 0;
     let allFolders: any[] = [];
     let isLast = false;
-    const maxResults = 100;
+     const maxResults = 100;
     const projectKey = issueKey.slice(0, 4);
-    try {
+       try {
       while (!isLast) {
         const url = `https://${zephyrDomain}/v2/folders?maxResults=${maxResults}&startAt=${startAt}&projectKey=${projectKey}&folderType=TEST_CASE`;
-        const zephyrRes = await fetchWithProxy(url, {
+        const zephyrRes = await fetch(url, {
           headers: {
             'Authorization': `Bearer ${zephyrToken}`,
             'Content-Type': 'application/json',
@@ -644,11 +650,11 @@ export async function activate(context: vscode.ExtensionContext) {
             name: p.name
           }
         ));
-        allFolders = allFolders.concat(folders);
+         allFolders = allFolders.concat(folders);
         isLast = zephyrData.isLast;
         startAt += maxResults;
       }
-      console.log('🔍 Dados do zephyr folders:', allFolders);
+       console.log('🔍 Dados do zephyr folders:', allFolders);
       return allFolders;
     } catch (err: any) {
       vscode.window.showErrorMessage(`Erro ao buscar pastas no Zephyr: ${err.message}`);
@@ -656,10 +662,9 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   });
 }
-
-async function criarTokenECriarThread(cookie: string): Promise<{ token: string; threadId: string }> {
+ async function criarTokenECriarThread(cookie: string): Promise<{ token: string; threadId: string }> {
   // Criar token
-  const tokenRes = await fetchWithProxy(`https://github.com/github-copilot/chat/token`, {
+  const tokenRes = await fetch(`https://github.com/github-copilot/chat/token`, {
     method: 'POST',
     headers: {
       'accept': 'application/json',
@@ -679,7 +684,7 @@ async function criarTokenECriarThread(cookie: string): Promise<{ token: string; 
   const token = tokenData.token;
   console.log('🔍 Copilot token:', JSON.stringify(token, null, 2));
   // Criar thread
-  const threadRes = await fetchWithProxy(`https://api.business.githubcopilot.com/github/chat/threads`, {
+  const threadRes = await fetch(`https://api.business.githubcopilot.com/github/chat/threads`, {
     method: 'POST',
     headers: {
       'authorization': `GitHub-Bearer ${token}`,
@@ -695,8 +700,7 @@ async function criarTokenECriarThread(cookie: string): Promise<{ token: string; 
   globalThreadId = threadId;
   return { token, threadId };
 }
-
-async function enviarCriarCenarioComCopilot(token: string, threadId: string, userStory: string, cenarioOriginal: string): Promise<string> {
+ async function enviarCriarCenarioComCopilot(token: string, threadId: string, userStory: string, cenarioOriginal: string): Promise<string> {
   console.log('🔍 Copilot user Story recebida:', userStory);
   console.log('🔍 Copilot cenario Original:', cenarioOriginal);
   const payload = {
@@ -704,7 +708,11 @@ async function enviarCriarCenarioComCopilot(token: string, threadId: string, use
     content: `Com base na análise da user story abaixo, crie cenários de testes e realize as seguintes ações:
                     1. Classifique o tipo do teste criado (**Test Type**): escolha entre *End to End*, *Regression*, *Acceptance* ou *UI*.  
                     2. Classifique o cenário como **Test Class**: *Positive* ou *Negative*.  
-                    3. Classifique o cenário como **Test Group**: *Backend*, *Front-End* ou *Desktop*.    
+                    3. Classifique o cenário como **Test Group**: *Backend*, *Front-End* ou *Desktop*.
+                       ⚠️ Importante: os campos acima devem ser retornados exatamente como exemplo:
+                      **Test Type:** Acceptance  
+                      **Test Class:** Positive  
+                      **Test Group:** Front-End  
                     4. Avalie se o cenário cobre o comportamento esperado da user story.  
                     5. Aponte se há pontos técnicos ou termos inadequados para testes de aceitação.  
                     6. Reescreva o cenário utilizando **boas práticas do Gherkin com as palavras-chave em inglês** (Scenario, Given, And, When, Then)mantendo o cenário em portugues**, evitando qualquer linguagem técnica ou de implementação (como Postman, status HTTP, payloads, tabelas do banco, etc). 
@@ -717,8 +725,7 @@ async function enviarCriarCenarioComCopilot(token: string, threadId: string, use
                       \`\`\`  
                     7. O novo cenário deve estar orientado a **comportamento do usuário** ou do sistema, com clareza, valor de negócio e sem ambiguidade.
                     ---
-                    📝 **User Story Analisada:**  
-                    ${userStory}`,
+                    📝 **User Story Analisada:** ${userStory}`,
     intent: 'conversation',
     references: [],
     context: [],
@@ -733,7 +740,7 @@ async function enviarCriarCenarioComCopilot(token: string, threadId: string, use
     mediaContent: [],
     skillOptions: { deepCodeSearch: false }
   };
-  const sendMsgRes = await fetchWithProxy(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
+  const sendMsgRes = await fetch(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
     method: 'POST',
     headers: {
       'authorization': `GitHub-Bearer ${token}`,
@@ -745,7 +752,7 @@ async function enviarCriarCenarioComCopilot(token: string, threadId: string, use
     throw new Error(`Erro ao enviar cenário: ${sendMsgRes.status}`);
   }
   await new Promise(r => setTimeout(r, 1000));
-  const messagesRes = await fetchWithProxy(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
+  const messagesRes = await fetch(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
     method: 'GET',
     headers: {
       'authorization': `GitHub-Bearer ${token}`,
@@ -758,8 +765,7 @@ async function enviarCriarCenarioComCopilot(token: string, threadId: string, use
   console.log('🔍 Copilot messagesData:', messagesLength);
   return ultimaResposta;
 }
-
-async function enviarCenarioParaCopilot(token: string, threadId: string, userStory: string, cenarioOriginal: string): Promise<string> {
+ async function enviarCenarioParaCopilot(token: string, threadId: string, userStory: string, cenarioOriginal: string): Promise<string> {
   console.log('🔍 Copilot user Story recebida:', userStory);
   console.log('🔍 Copilot cenario Original:', cenarioOriginal);
   const payload = {
@@ -771,11 +777,9 @@ async function enviarCenarioParaCopilot(token: string, threadId: string, userSto
                     4. Reescreva o cenário utilizando **boas práticas do Gherkin com as palavras-chave em inglês** (Scenario, Given, And, When, Then) mantendo o cenário em portugues**, evitando qualquer linguagem técnica ou de implementação (como Postman, status HTTP, payloads, tabelas do banco, etc).  
                     5. O novo cenário deve estar orientado a **comportamento do usuário** ou do sistema, com clareza, valor de negócio e sem ambiguidade.
                     ---
-                    📝 **User Story Analisada:**  
-                    ${userStory}
+                    📝 **User Story Analisada:** ${userStory}
                     ---
-                    🧪 **Cenário de Teste Original:**  
-                    ${cenarioOriginal}`,
+                    🧪 **Cenário de Teste Original:** ${cenarioOriginal}`,
     intent: 'conversation',
     references: [],
     context: [],
@@ -790,7 +794,7 @@ async function enviarCenarioParaCopilot(token: string, threadId: string, userSto
     mediaContent: [],
     skillOptions: { deepCodeSearch: false }
   };
-  const sendMsgRes = await fetchWithProxy(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
+  const sendMsgRes = await fetch(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
     method: 'POST',
     headers: {
       'authorization': `GitHub-Bearer ${token}`,
@@ -802,7 +806,7 @@ async function enviarCenarioParaCopilot(token: string, threadId: string, userSto
     throw new Error(`Erro ao enviar cenário: ${sendMsgRes.status}`);
   }
   await new Promise(r => setTimeout(r, 1000));
-  const messagesRes = await fetchWithProxy(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
+  const messagesRes = await fetch(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
     method: 'GET',
     headers: {
       'authorization': `GitHub-Bearer ${token}`,
@@ -815,8 +819,7 @@ async function enviarCenarioParaCopilot(token: string, threadId: string, userSto
   console.log('🔍 Copilot messagesData:', messagesLength);
   return ultimaResposta;
 }
-
-async function analiseStoryEpicFunCopilot(token: string, threadId: string, description: string, bdd: string): Promise<string> {
+ async function analiseStoryEpicFunCopilot(token: string, threadId: string, description: string, bdd: string): Promise<string> {
   const payload = {
     responseMessageID: crypto.randomUUID(),
     content: `Analise a seguinte user story extraída do Jira e classifique-a de acordo com os seguintes critérios:
@@ -845,7 +848,7 @@ async function analiseStoryEpicFunCopilot(token: string, threadId: string, descr
     mediaContent: [],
     skillOptions: { deepCodeSearch: false }
   };
-  const sendMsgRes = await fetchWithProxy(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
+  const sendMsgRes = await fetch(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
     method: 'POST',
     headers: {
       'authorization': `GitHub-Bearer ${token}`,
@@ -857,7 +860,7 @@ async function analiseStoryEpicFunCopilot(token: string, threadId: string, descr
     throw new Error(`Erro ao enviar cenário: ${sendMsgRes.status}`);
   }
   await new Promise(r => setTimeout(r, 1000));
-  const messagesRes = await fetchWithProxy(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
+  const messagesRes = await fetch(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
     method: 'GET',
     headers: {
       'authorization': `GitHub-Bearer ${token}`,
@@ -870,8 +873,7 @@ async function analiseStoryEpicFunCopilot(token: string, threadId: string, descr
   console.log('🔍 Copilot messagesData:', messagesLength);
   return ultimaResposta;
 }
-
-// Utilitário para pegar as configurações do usuário no settings.json
+ // Utilitário para pegar as configurações do usuário no settings.json
 function getJiraSettings() {
   return {
     jiraDomain: vscode.workspace.getConfiguration().get<string>('plugin.jira.domain') || '',
@@ -879,7 +881,7 @@ function getJiraSettings() {
     jiraToken: vscode.workspace.getConfiguration().get<string>('plugin.jira.token') || '',
   };
 }
-// Utilitário para pegar as configurações do usuário no settings.json
+ // Utilitário para pegar as configurações do usuário no settings.json
 function getZephyrSettings() {
   return {
     zephyrOwnerId: vscode.workspace.getConfiguration().get<string>('plugin.zephyr.ownerId') || '',
@@ -887,13 +889,13 @@ function getZephyrSettings() {
     zephyrToken: vscode.workspace.getConfiguration().get<string>('plugin.zephyr.token') || '',
   };
 }
-// Utilitário para pegar as configurações do usuário no settings.json
+ // Utilitário para pegar as configurações do usuário no settings.json
 function getCopilotSettings() {
   return {
     copilotCookie: vscode.workspace.getConfiguration().get<string>('plugin.copilot.Cookie') || '',
   };
 }
-// Utilitário para codificar auth em base64
+ // Utilitário para codificar auth em base64
 function encodeAuth(email: string, token: string) {
   return Buffer.from(`${email}:${token}`).toString('base64');
 }
