@@ -173,28 +173,77 @@ import { SettingsPanel } from './panel/settingsPanel';
     //     return [];
     //   }
     // })
-    vscode.commands.registerCommand('plugin-vscode.buscarSugestoesIssue', async (texto: string, projectKey?: string) => {
+
+
+
+
+    //     vscode.commands.registerCommand('plugin-vscode.buscarSugestoesIssue', async (texto: string, projectKey?: string) => {
+//   const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
+//   const auth = encodeAuth(jiraEmail, jiraToken);
+//   const term = (texto || '').trim();
+
+//   const isFullKey = /^[A-Z][A-Z0-9_]*-\d+$/i.test(term);
+
+//   try {
+//     if (isFullKey) {
+//       // match exato quando a pessoa digita a chave completa
+//       const jql = `key = "${term.toUpperCase()}"`;
+//       const url = `https://${jiraDomain}/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=5&fields=key,summary`;
+//       const res = await fetch(url, { headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' } });
+//       const json = await res.json();
+//       return (json.issues || []).map((i: any) => ({ key: i.key, summary: i.fields.summary || '' }));
+//     } else {
+//       // sugestões por prefixo de chave OU por trecho do título (parcial)
+//       const currentJQL = projectKey ? `project = ${projectKey}` : '';
+//       const url =
+//         `https://${jiraDomain}/rest/api/2/issue/picker` +
+//         `?query=${encodeURIComponent(term)}` +
+//         (currentJQL ? `&currentJQL=${encodeURIComponent(currentJQL)}` : '');
+
+//       const res = await fetch(url, { headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' } });
+//       const data = await res.json();
+
+//       const issues = (data?.sections || []).flatMap((s: any) => s.issues || []);
+//       return issues.slice(0, 10).map((i: any) => ({
+//         key: i.key,
+//         // algumas instâncias retornam summary/summaryText/label — usamos o que vier
+//         summary: i.summary || i.summaryText || i.label || ''
+//       }));
+//     }
+//   } catch (err: any) {
+//     vscode.window.showErrorMessage(`Erro ao buscar sugestões do Jira: ${err.message}`);
+//     return [];
+//   }
+// })
+
+vscode.commands.registerCommand('plugin-vscode.buscarSugestoesIssue', async (texto: string, projectKey?: string) => {
   const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
   const auth = encodeAuth(jiraEmail, jiraToken);
   const term = (texto || '').trim();
 
+  // Tipos permitidos
+  const allowedTypesJQL = 'issuetype in ("Functionality","Epic","Story")';
   const isFullKey = /^[A-Z][A-Z0-9_]*-\d+$/i.test(term);
 
   try {
     if (isFullKey) {
-      // match exato quando a pessoa digita a chave completa
-      const jql = `key = "${term.toUpperCase()}"`;
+      // match exato de chave + filtro por tipo
+      const jql = `key = "${term.toUpperCase()}" AND ${allowedTypesJQL}`;
       const url = `https://${jiraDomain}/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=5&fields=key,summary`;
       const res = await fetch(url, { headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' } });
       const json = await res.json();
       return (json.issues || []).map((i: any) => ({ key: i.key, summary: i.fields.summary || '' }));
     } else {
-      // sugestões por prefixo de chave OU por trecho do título (parcial)
-      const currentJQL = projectKey ? `project = ${projectKey}` : '';
+      // sugestões parciais (prefixo de chave ou parte do título) + filtro por tipo
+      const scopeJQL = [
+        projectKey ? `project = ${projectKey}` : null,
+        allowedTypesJQL
+      ].filter(Boolean).join(' AND ');
+
       const url =
         `https://${jiraDomain}/rest/api/2/issue/picker` +
         `?query=${encodeURIComponent(term)}` +
-        (currentJQL ? `&currentJQL=${encodeURIComponent(currentJQL)}` : '');
+        (scopeJQL ? `&currentJQL=${encodeURIComponent(scopeJQL)}` : '');
 
       const res = await fetch(url, { headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' } });
       const data = await res.json();
@@ -202,7 +251,6 @@ import { SettingsPanel } from './panel/settingsPanel';
       const issues = (data?.sections || []).flatMap((s: any) => s.issues || []);
       return issues.slice(0, 10).map((i: any) => ({
         key: i.key,
-        // algumas instâncias retornam summary/summaryText/label — usamos o que vier
         summary: i.summary || i.summaryText || i.label || ''
       }));
     }
