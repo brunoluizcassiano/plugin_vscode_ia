@@ -879,7 +879,19 @@ function analiseStoryEpicFunCopilot(token, threadId, description, bdd) {
     return __awaiter(this, void 0, void 0, function* () {
         const payload = {
             responseMessageID: crypto.randomUUID(),
-            content: `Analise a seguinte user story extraída do Jira e classifique-a de acordo com os seguintes critérios:
+            content: `Você é um analista de QA funcional. Avalie a user story a seguir priorizando visão de negócio e jornada do cliente, NÃO aspectos técnicos.
+
+              INSTRUÇÕES IMPORTANTES (SIGA À RISCA):
+              - Se a descrição for predominantemente técnica (ex.: APIs, payload, status HTTP, banco, headers, microserviços, JSON, SQL, Postman) e não houver **regras de negócio** e **pré-condições** claras, você DEVE:
+                • Atribuir notas BAIXAS (máx. 2/5) para: "Clareza de requisitos funcionais", "Visão centrada no cliente", "Viabilidade de extração de cenários" e INVEST (V - Valiosa e T - Testável).  
+                • Classificar como "Precisa de refinamento" no parecer, explicitando as lacunas.
+              - Critérios de aceite DEVEM ser **funcionais**, em linguagem de negócio e **orientados à jornada/experiência do usuário**.  
+                • PROIBIDO mencionar termos técnicos (HTTP, 200/400/500, payload, JSON, API, endpoint, banco, tabela, schema, Kafka etc.).  
+                • Foque em estados do sistema perceptíveis pelo usuário, regras de elegibilidade, mensagens e comportamentos.
+              - Se houver BDD, avalie a coerência com o negócio; se estiver técnico, proponha versão funcional.
+              - Escreva toda a resposta em **português (Brasil)**.
+              
+              Analise a seguinte user story extraída do Jira e classifique-a de acordo com os seguintes critérios:
               1. Clareza e detalhamento dos requisitos funcionais
               2. Presença de objetivos e visão centrada no cliente
               3. Viabilidade de extração de cenários de testes funcionais e E2E com base na descrição fornecida
