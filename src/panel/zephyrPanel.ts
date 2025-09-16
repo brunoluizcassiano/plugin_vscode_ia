@@ -306,7 +306,45 @@ export class ZephyrPanel {
             panel.webview.postMessage({ type: 'estruturaProjeto', folders: [], flat: [], projectKey: '' });
           }
       }else if (message.type === 'aplicarFiltrosProjeto') {
-        // 👉 novo caso: ao aplicar seleção, buscar "todos os testes que estão naquela pasta"
+        // // 👉 novo caso: ao aplicar seleção, buscar "todos os testes que estão naquela pasta"
+        // try {
+        //   const projectKey: string = message.projetoIdOuKey || '';
+        //   const pastaIds: string[] = Array.isArray(message.pastaIds) ? message.pastaIds : [];
+        //   const folderId = pastaIds[0]; // seleção única (pela UI nova)
+
+        //   if (!projectKey || !folderId) {
+        //     throw new Error('Projeto e pasta são obrigatórios.');
+        //   }
+
+        //   // Chame seu comando que retorna os testes de UMA pasta.
+        //   // Se o seu já aceita múltiplas pastas, passe o array completo.
+        //   // Ajuste o nome do command se o seu for diferente.
+        //   const rawTests = await vscode.commands.executeCommand<any[]>(
+        //     'plugin-vscode.getZephyrTestsByFolder',
+        //     projectKey,
+        //     folderId,
+        //     { recursive: false } // se quiser incluir subpastas, troque para true no seu command
+        //   );
+
+        //   const testesZephyr = (Array.isArray(rawTests) ? rawTests : []).map(mapZephyrTestsForWebview);
+
+        //   // Enviamos direto no formato que a webview já trata e renderiza
+        //   panel.webview.postMessage({
+        //     type: 'zephyrDataProjeto',
+        //     zephyrDataProjeto: { testesZephyr },
+        //     projectKey,
+        //     folderId
+        //   });
+        // } catch (e: any) {
+        //   vscode.window.showErrorMessage(`Erro ao carregar testes da pasta: ${e?.message || e}`);
+        //   panel.webview.postMessage({
+        //     type: 'zephyrDataProjeto',
+        //     zephyrDataProjeto: { testesZephyr: [] },
+        //     projectKey: message.projetoIdOuKey || '',
+        //     folderId: (Array.isArray(message.pastaIds) && message.pastaIds[0]) || null
+        //   });
+        // }
+          // 👉 novo caso: ao aplicar seleção, buscar "todos os testes que estão naquela pasta"
         try {
           const projectKey: string = message.projetoIdOuKey || '';
           const pastaIds: string[] = Array.isArray(message.pastaIds) ? message.pastaIds : [];
@@ -326,10 +364,11 @@ export class ZephyrPanel {
             { recursive: false } // se quiser incluir subpastas, troque para true no seu command
           );
 
-          const testesZephyr = (Array.isArray(rawTests) ? rawTests : []).map(mapZephyrTestsForWebview);
-
-          // Enviamos direto no formato que a webview já trata e renderiza
-          panel.webview.postMessage({
+          const filtros = (message && message.filtros) ? message.filtros : {};
+const _filtered = applyZephyrFilters(Array.isArray(rawTests) ? rawTests : [], filtros);
+const testesZephyr = (Array.isArray(_filtered) ? _filtered : []).map(mapZephyrTestsForWebview);
+// Enviamos direto no formato que a webview já trata e renderiza
+          this._panel.webview.postMessage({
             type: 'zephyrDataProjeto',
             zephyrDataProjeto: { testesZephyr },
             projectKey,
@@ -337,7 +376,7 @@ export class ZephyrPanel {
           });
         } catch (e: any) {
           vscode.window.showErrorMessage(`Erro ao carregar testes da pasta: ${e?.message || e}`);
-          panel.webview.postMessage({
+          this._panel.webview.postMessage({
             type: 'zephyrDataProjeto',
             zephyrDataProjeto: { testesZephyr: [] },
             projectKey: message.projetoIdOuKey || '',
@@ -428,3 +467,70 @@ function mapZephyrTestsForWebview(raw: any): any {
     script: raw.script ?? raw.steps?.gherkin ?? raw.steps ?? ''
   };
 }
+
+// === Helpers de filtro (aplicados no painel antes de enviar à view) ===
+function _norm(v: any): string {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'string') return v.trim();
+  return String(v).trim();
+}
+function _get(obj: any, keys: string[]): string {
+  for (const k of keys) {
+    const v = obj?.[k];
+    if (v !== undefined && v !== null && v !== '') return _norm(v);
+  }
+  return '';
+}
+function _fromCustomFields(cf: any, names: string[]): string {
+  if (!cf || typeof cf !== 'object') return '';
+  for (const name of names) {
+    const c = cf[name] ?? cf[name.toLowerCase?.()] ?? cf[name.toUpperCase?.()];
+    if (c !== undefined && c !== null && c !== '') return _norm(c);
+  }
+  return '';
+}
+function matchesFilter(val: string|string[]|undefined, selected: string): boolean {
+  if (!selected) return true;
+  if (Array.isArray(val)) return val.map(_norm).includes(_norm(selected));
+  return _norm(val ?? '') === _norm(selected);
+}
+function ownerMatches(test: any, owner: string): boolean {
+  if (!owner) return true;
+  const owners = test?.owners || test?.owner || test?.details?.owner || test?.details?.customFields?.owner || test?.customFields?.owner;
+  if (Array.isArray(owners)) return owners.map(_norm).some(v => v.includes(_norm(owner)));
+  const single = _norm(owners);
+  return single ? single.includes(_norm(owner)) : false;
+}
+function testHasLabel(test: any, label: string): boolean {
+  if (!label) return true;
+  const labels = test?.labels || test?.details?.labels || test?.details?.customFields?.labels || test?.customFields?.labels;
+  if (Array.isArray(labels)) return labels.map(_norm).some(v => v.includes(_norm(label)));
+  const single = _get(test, ['label']) || _fromCustomFields(test?.details?.customFields ?? test?.customFields, ['Label']);
+  return single ? _norm(single).includes(_norm(label)) : false;
+}
+function applyZephyrFilters(rawTests: any[], filtros: any): any[] {
+  if (!Array.isArray(rawTests) || !filtros || typeof filtros !== 'object') return rawTests || [];
+  const out: any[] = [];
+  for (const t of rawTests) {
+    const cf = t?.details?.customFields ?? t?.customFields;
+    const automationStatus = _get(t, ['automationStatus','automation','automated']) || _fromCustomFields(cf, ['Automation status','Automation Status','Automação']);
+    const status           = _get(t, ['status','state']) || _fromCustomFields(cf, ['Status']);
+    const coverage         = _get(t, ['coverage']) || _fromCustomFields(cf, ['Coverage']);
+    const testType         = _get(t, ['testType','type']) || _fromCustomFields(cf, ['Test Type','Tipo']);
+    const testClass        = _get(t, ['testClass','class']) || _fromCustomFields(cf, ['Test Class','Classe']);
+    const testGroup        = _get(t, ['testGroup','group']) || _fromCustomFields(cf, ['Test Group','Grupo']);
+
+    if (!matchesFilter(automationStatus, filtros.automationStatus)) continue;
+    if (!matchesFilter(status,           filtros.status))           continue;
+    if (!matchesFilter(coverage,         filtros.coverage))         continue;
+    if (!matchesFilter(testType,         filtros.testType))         continue;
+    if (!matchesFilter(testClass,        filtros.testClass))        continue;
+    if (!matchesFilter(testGroup,        filtros.testGroup))        continue;
+    if (!ownerMatches(t, filtros.owner))                             continue;
+    if (!testHasLabel(t, filtros.label))                             continue;
+    out.push(t);
+  }
+  return out;
+}
+
+
