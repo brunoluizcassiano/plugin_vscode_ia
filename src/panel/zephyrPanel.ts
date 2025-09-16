@@ -270,6 +270,80 @@ export class ZephyrPanel {
           tribeName: tribeName,
           extraTags: extraTags
          });
+      } else if (message.type === 'listarProjetosJira'){
+        try {
+          // Chama o comando já registrado no extension.ts
+          // Ele retorna algo como: [{ key: 'ABC', name: 'Meu Projeto' }, ...]
+          const projects = await vscode.commands.executeCommand<any[]>(
+            'plugin-vscode.getJiraProjects'
+          );
+
+          // Devolve para a webview exatamente no formato que ela espera
+          panel.webview.postMessage({
+            type: 'projetosJira',
+            projects: Array.isArray(projects) ? projects : []
+          });
+        } catch (err: any) {
+          vscode.window.showErrorMessage(`Erro ao listar projetos do Jira: ${err?.message || err}`);
+          panel.webview.postMessage({ type: 'projetosJira', projects: [] });
+        }
+      } else if (message.type === 'carregarEstruturaProjeto'){
+        try {
+            const projectKey: string = message.projetoIdOuKey || '';
+            const resultado = await vscode.commands.executeCommand<any>(
+              'plugin-vscode.getZephyrFoldersByProject',
+              projectKey // já é a KEY
+            );
+
+            panel.webview.postMessage({
+              type: 'estruturaProjeto',
+              folders: resultado?.folders || [], // árvore
+              flat: resultado?.flat || [],       // lista plana (se quiser usar)
+              projectKey: resultado?.projectKey || projectKey
+            });
+          } catch (e: any) {
+            vscode.window.showErrorMessage(`Erro ao carregar estrutura do projeto: ${e.message || e}`);
+            panel.webview.postMessage({ type: 'estruturaProjeto', folders: [], flat: [], projectKey: '' });
+          }
+      }else if (message.type === 'aplicarFiltrosProjeto') {
+        // 👉 novo caso: ao aplicar seleção, buscar "todos os testes que estão naquela pasta"
+        try {
+          const projectKey: string = message.projetoIdOuKey || '';
+          const pastaIds: string[] = Array.isArray(message.pastaIds) ? message.pastaIds : [];
+          const folderId = pastaIds[0]; // seleção única (pela UI nova)
+
+          if (!projectKey || !folderId) {
+            throw new Error('Projeto e pasta são obrigatórios.');
+          }
+
+          // Chame seu comando que retorna os testes de UMA pasta.
+          // Se o seu já aceita múltiplas pastas, passe o array completo.
+          // Ajuste o nome do command se o seu for diferente.
+          const rawTests = await vscode.commands.executeCommand<any[]>(
+            'plugin-vscode.getZephyrTestsByFolder',
+            projectKey,
+            folderId,
+            { recursive: false } // se quiser incluir subpastas, troque para true no seu command
+          );
+
+          const testesZephyr = (Array.isArray(rawTests) ? rawTests : []).map(mapZephyrTestsForWebview);
+
+          // Enviamos direto no formato que a webview já trata e renderiza
+          panel.webview.postMessage({
+            type: 'zephyrDataProjeto',
+            zephyrDataProjeto: { testesZephyr },
+            projectKey,
+            folderId
+          });
+        } catch (e: any) {
+          vscode.window.showErrorMessage(`Erro ao carregar testes da pasta: ${e?.message || e}`);
+          panel.webview.postMessage({
+            type: 'zephyrDataProjeto',
+            zephyrDataProjeto: { testesZephyr: [] },
+            projectKey: message.projetoIdOuKey || '',
+            folderId: (Array.isArray(message.pastaIds) && message.pastaIds[0]) || null
+          });
+        }
       }
     });
     // Envia nome do usuário assim que carrega
@@ -337,5 +411,20 @@ export class ZephyrPanel {
         });
       }
     }
-  }
+  }  
+}
+
+// (opcional, mas recomendado) — normaliza o shape dos testes pro que a webview espera
+function mapZephyrTestsForWebview(raw: any): any {
+  if (!raw || typeof raw !== 'object') return raw;
+  // Ajuste aqui conforme o shape real dos testes vindos do seu command
+  return {
+    key: raw.key ?? raw.testKey ?? raw.name ?? 'SemKey',
+    version: raw.version ?? raw.versionNumber ?? 1,
+    details: {
+      name: raw.details?.name ?? raw.name ?? '',
+      customFields: raw.details?.customFields ?? raw.customFields ?? {}
+    },
+    script: raw.script ?? raw.steps?.gherkin ?? raw.steps ?? ''
+  };
 }

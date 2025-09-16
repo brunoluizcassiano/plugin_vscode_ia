@@ -104,10 +104,7 @@ function activate(context) {
                         'Authorization': `Basic ${auth}`,
                         'Accept': 'application/json',
                     },
-                    // timeoutMs: 20000,
                 });
-                // const values = Array.isArray(res?.values) ? res.values : [];
-                // return values.map((p: any) => ({ key: p.key, name: p.name }));
                 const data = yield response.json();
                 // return data.values.map((p: any) => ({ key: p.key, name: p.name }));
                 return data.map((p) => ({ key: p.key, name: p.name }));
@@ -146,80 +143,7 @@ function activate(context) {
             }
         })));
         // 🔍 Comando para buscar sugestões de issues com base no summary
-        context.subscriptions.push(
-        // vscode.commands.registerCommand('plugin-vscode.buscarSugestoesIssue', async (keyPrefix: string, projectKey: string) => {
-        //   const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
-        //   const auth = encodeAuth(jiraEmail, jiraToken);
-        //   // const jql = `
-        //   //   project = ${projectKey}
-        //   //   AND summary ~ "${keyPrefix}*"
-        //   //   AND issuetype IN ("Functionality", "Epic", "Story")
-        //   //   ORDER BY updated DESC
-        //   // `;
-        //   // const url = `https://${jiraDomain}/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=5&fields=key,summary`;
-        //   const term = (keyPrefix || '').trim();
-        //   const isIssueKey = /^[A-Z][A-Z0-9_]*-\d+$/i.test(term);
-        //   // Se digitar uma chave, busca direto pela KEY
-        //   const jql = isIssueKey
-        //     ? `key = "${term.toUpperCase()}"`
-        //     : [
-        //         projectKey ? `project = ${projectKey}` : null,
-        //         `(summary ~ "${term}*" OR text ~ "${term}*")`,
-        //         `issuetype IN ("Functionality", "Epic", "Story")`
-        //       ].filter(Boolean).join(' AND ') + ' ORDER BY updated DESC';
-        //   const url = `https://${jiraDomain}/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=5&fields=key,summary`;
-        //   try {
-        //     const response = await fetch(url, {
-        //       headers: {
-        //         'Authorization': `Basic ${auth}`,
-        //         'Accept': 'application/json',
-        //       },
-        //     });
-        //     const json = await response.json();
-        //     return (json.issues || []).map((issue: any) => ({
-        //       key: issue.key,
-        //       summary: issue.fields.summary,
-        //     }));
-        //   } catch (err: any) {
-        //     vscode.window.showErrorMessage(`Erro ao buscar issues do Jira: ${err.message}`);
-        //     return [];
-        //   }
-        // })
-        //     vscode.commands.registerCommand('plugin-vscode.buscarSugestoesIssue', async (texto: string, projectKey?: string) => {
-        //   const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
-        //   const auth = encodeAuth(jiraEmail, jiraToken);
-        //   const term = (texto || '').trim();
-        //   const isFullKey = /^[A-Z][A-Z0-9_]*-\d+$/i.test(term);
-        //   try {
-        //     if (isFullKey) {
-        //       // match exato quando a pessoa digita a chave completa
-        //       const jql = `key = "${term.toUpperCase()}"`;
-        //       const url = `https://${jiraDomain}/rest/api/2/search?jql=${encodeURIComponent(jql)}&maxResults=5&fields=key,summary`;
-        //       const res = await fetch(url, { headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' } });
-        //       const json = await res.json();
-        //       return (json.issues || []).map((i: any) => ({ key: i.key, summary: i.fields.summary || '' }));
-        //     } else {
-        //       // sugestões por prefixo de chave OU por trecho do título (parcial)
-        //       const currentJQL = projectKey ? `project = ${projectKey}` : '';
-        //       const url =
-        //         `https://${jiraDomain}/rest/api/2/issue/picker` +
-        //         `?query=${encodeURIComponent(term)}` +
-        //         (currentJQL ? `&currentJQL=${encodeURIComponent(currentJQL)}` : '');
-        //       const res = await fetch(url, { headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' } });
-        //       const data = await res.json();
-        //       const issues = (data?.sections || []).flatMap((s: any) => s.issues || []);
-        //       return issues.slice(0, 10).map((i: any) => ({
-        //         key: i.key,
-        //         // algumas instâncias retornam summary/summaryText/label — usamos o que vier
-        //         summary: i.summary || i.summaryText || i.label || ''
-        //       }));
-        //     }
-        //   } catch (err: any) {
-        //     vscode.window.showErrorMessage(`Erro ao buscar sugestões do Jira: ${err.message}`);
-        //     return [];
-        //   }
-        // })
-        vscode.commands.registerCommand('plugin-vscode.buscarSugestoesIssue', (texto, projectKey) => __awaiter(this, void 0, void 0, function* () {
+        context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.buscarSugestoesIssue', (texto, projectKey) => __awaiter(this, void 0, void 0, function* () {
             const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
             const auth = encodeAuth(jiraEmail, jiraToken);
             const term = (texto || '').trim();
@@ -388,9 +312,157 @@ function activate(context) {
                 testesZephyr,
             };
         })));
+        // 🔎 Estrutura de pastas do Zephyr por projectKey
+        context.subscriptions.push(
+        // 🔎 Estrutura de pastas do Zephyr por projectKey (sem resolver ID)
+        vscode.commands.registerCommand('plugin-vscode.getZephyrFoldersByProject', (projectKeyParam) => __awaiter(this, void 0, void 0, function* () {
+            const { zephyrToken, zephyrDomain } = getZephyrSettings();
+            try {
+                const projectKey = String(projectKeyParam || '').trim();
+                if (!projectKey)
+                    throw new Error('Project key não informada.');
+                let startAt = 0;
+                const maxResults = 100;
+                let isLast = false;
+                const allFolders = [];
+                while (!isLast) {
+                    const url = `https://${zephyrDomain}/v2/folders?maxResults=${maxResults}&startAt=${startAt}&projectKey=${encodeURIComponent(projectKey)}&folderType=TEST_CASE`;
+                    const res = yield (0, node_fetch_1.default)(url, {
+                        headers: {
+                            'Authorization': `Bearer ${zephyrToken}`,
+                            'Accept': 'application/json',
+                        }
+                    });
+                    if (!res.ok) {
+                        const t = yield res.text();
+                        throw new Error(`Falha ao listar pastas: ${res.status} - ${t}`);
+                    }
+                    const json = yield res.json();
+                    const values = Array.isArray(json === null || json === void 0 ? void 0 : json.values) ? json.values : [];
+                    values.forEach((p) => {
+                        allFolders.push({
+                            id: Number(p.id),
+                            parentId: (p.parentId == null ? null : Number(p.parentId)),
+                            name: String(p.name || ''),
+                        });
+                    });
+                    isLast = !!json.isLast;
+                    startAt += maxResults;
+                }
+                // monta árvore (inline — sem helper separado)
+                const byId = new Map();
+                const roots = [];
+                allFolders.forEach(f => byId.set(f.id, { id: f.id, name: f.name, children: [] }));
+                allFolders.forEach(f => {
+                    const node = byId.get(f.id);
+                    if (f.parentId && byId.has(f.parentId)) {
+                        byId.get(f.parentId).children.push(node);
+                    }
+                    else {
+                        roots.push(node);
+                    }
+                });
+                return { projectKey, folders: roots, flat: allFolders };
+            }
+            catch (err) {
+                vscode.window.showErrorMessage(`Erro ao carregar pastas do Zephyr: ${err.message}`);
+                return { projectKey: '', folders: [], flat: [] };
+            }
+        })));
+        // Lista os testes de uma pasta do Zephyr (sem recursão por padrão)
+        context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.getZephyrTestsByFolder', (projectKey, folderId, opts // pode expandir se quiser recursion mais tarde
+        ) => __awaiter(this, void 0, void 0, function* () {
+            var _d, _e, _f;
+            const { zephyrToken, zephyrDomain } = getZephyrSettings();
+            const maxResults = (_d = opts === null || opts === void 0 ? void 0 : opts.maxResults) !== null && _d !== void 0 ? _d : 100;
+            if (!projectKey || !folderId) {
+                vscode.window.showErrorMessage('Projeto e pasta são obrigatórios.');
+                return [];
+            }
+            // 1) Paginação para buscar todos os test cases da PASTA
+            let startAt = 0;
+            let isLast = false;
+            const allTests = [];
+            try {
+                while (!isLast) {
+                    const url = `https://${zephyrDomain}/v2/testcases` +
+                        `?projectKey=${encodeURIComponent(projectKey)}` +
+                        `&folderId=${encodeURIComponent(String(folderId))}` +
+                        `&maxResults=${maxResults}` +
+                        `&startAt=${startAt}`;
+                    const res = yield (0, node_fetch_1.default)(url, {
+                        headers: {
+                            'Authorization': `Bearer ${zephyrToken}`,
+                            'Accept': 'application/json',
+                        }
+                    });
+                    if (!res.ok) {
+                        const txt = yield res.text();
+                        throw new Error(`Falha ao listar test cases da pasta: ${res.status} - ${txt}`);
+                    }
+                    const json = yield res.json();
+                    const values = Array.isArray(json.values) ? json.values : [];
+                    allTests.push(...values);
+                    isLast = !!json.isLast || values.length === 0;
+                    startAt += maxResults;
+                }
+            }
+            catch (err) {
+                vscode.window.showErrorMessage(`Erro ao buscar testes da pasta no Zephyr: ${err.message}`);
+                return [];
+            }
+            // 2) Para cada test case, buscar detalhes e script (mantém padrão do seu código)
+            const out = [];
+            for (const t of allTests) {
+                const key = t.key || t.testCaseKey || t.name || '';
+                if (!key)
+                    continue;
+                // detalhes
+                let details = {};
+                try {
+                    const detRes = yield (0, node_fetch_1.default)(`https://${zephyrDomain}/v2/testcases/${encodeURIComponent(key)}`, {
+                        headers: {
+                            'Authorization': `Bearer ${zephyrToken}`,
+                            'Accept': 'application/json',
+                        }
+                    });
+                    if (detRes.ok) {
+                        details = yield detRes.json();
+                    }
+                }
+                catch (e) {
+                    console.warn(`⚠️ Falha ao buscar detalhes do teste ${key}:`, (e === null || e === void 0 ? void 0 : e.message) || e);
+                }
+                // script (gherkin)
+                let script = '';
+                try {
+                    const scriptRes = yield (0, node_fetch_1.default)(`https://${zephyrDomain}/v2/testcases/${encodeURIComponent(key)}/testscript`, {
+                        headers: {
+                            'Authorization': `Bearer ${zephyrToken}`,
+                            'Accept': 'application/json',
+                        }
+                    });
+                    if (scriptRes.ok) {
+                        const s = yield scriptRes.json();
+                        script = (s === null || s === void 0 ? void 0 : s.text) || '';
+                    }
+                }
+                catch (e) {
+                    console.warn(`⚠️ Falha ao buscar script do teste ${key}:`, (e === null || e === void 0 ? void 0 : e.message) || e);
+                }
+                out.push({
+                    key,
+                    version: (_f = (_e = t.version) !== null && _e !== void 0 ? _e : details === null || details === void 0 ? void 0 : details.version) !== null && _f !== void 0 ? _f : 1,
+                    details,
+                    script
+                });
+            }
+            // 3) Retorna para o panel (quem chamou via executeCommand)
+            return out;
+        })));
         // ✅ Novo comando: buscar detalhes completos da issue
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.getJiraIssueDetails', (issueKey) => __awaiter(this, void 0, void 0, function* () {
-            var _d, _e, _f;
+            var _g, _h, _j;
             const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
             const { zephyrToken, zephyrDomain } = getZephyrSettings();
             const auth = encodeAuth(jiraEmail, jiraToken);
@@ -469,9 +541,9 @@ function activate(context) {
                     summary: data.fields.summary,
                     description: data.fields.description,
                     bddSpecification: data.fields.customfield_10553,
-                    status: ((_d = data.fields.status) === null || _d === void 0 ? void 0 : _d.name) || 'Sem status',
-                    assignee: ((_e = data.fields.assignee) === null || _e === void 0 ? void 0 : _e.displayName) || 'Não atribuído',
-                    reporter: ((_f = data.fields.reporter) === null || _f === void 0 ? void 0 : _f.displayName) || 'Desconhecido',
+                    status: ((_g = data.fields.status) === null || _g === void 0 ? void 0 : _g.name) || 'Sem status',
+                    assignee: ((_h = data.fields.assignee) === null || _h === void 0 ? void 0 : _h.displayName) || 'Não atribuído',
+                    reporter: ((_j = data.fields.reporter) === null || _j === void 0 ? void 0 : _j.displayName) || 'Desconhecido',
                     attachments: (data.fields.attachment || []).map((att) => ({
                         filename: att.filename,
                         url: att.content

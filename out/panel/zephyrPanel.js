@@ -252,6 +252,72 @@ class ZephyrPanel {
                     extraTags: extraTags
                 });
             }
+            else if (message.type === 'listarProjetosJira') {
+                try {
+                    // Chama o comando já registrado no extension.ts
+                    // Ele retorna algo como: [{ key: 'ABC', name: 'Meu Projeto' }, ...]
+                    const projects = yield vscode.commands.executeCommand('plugin-vscode.getJiraProjects');
+                    // Devolve para a webview exatamente no formato que ela espera
+                    panel.webview.postMessage({
+                        type: 'projetosJira',
+                        projects: Array.isArray(projects) ? projects : []
+                    });
+                }
+                catch (err) {
+                    vscode.window.showErrorMessage(`Erro ao listar projetos do Jira: ${(err === null || err === void 0 ? void 0 : err.message) || err}`);
+                    panel.webview.postMessage({ type: 'projetosJira', projects: [] });
+                }
+            }
+            else if (message.type === 'carregarEstruturaProjeto') {
+                try {
+                    const projectKey = message.projetoIdOuKey || '';
+                    const resultado = yield vscode.commands.executeCommand('plugin-vscode.getZephyrFoldersByProject', projectKey // já é a KEY
+                    );
+                    panel.webview.postMessage({
+                        type: 'estruturaProjeto',
+                        folders: (resultado === null || resultado === void 0 ? void 0 : resultado.folders) || [],
+                        flat: (resultado === null || resultado === void 0 ? void 0 : resultado.flat) || [],
+                        projectKey: (resultado === null || resultado === void 0 ? void 0 : resultado.projectKey) || projectKey
+                    });
+                }
+                catch (e) {
+                    vscode.window.showErrorMessage(`Erro ao carregar estrutura do projeto: ${e.message || e}`);
+                    panel.webview.postMessage({ type: 'estruturaProjeto', folders: [], flat: [], projectKey: '' });
+                }
+            }
+            else if (message.type === 'aplicarFiltrosProjeto') {
+                // 👉 novo caso: ao aplicar seleção, buscar "todos os testes que estão naquela pasta"
+                try {
+                    const projectKey = message.projetoIdOuKey || '';
+                    const pastaIds = Array.isArray(message.pastaIds) ? message.pastaIds : [];
+                    const folderId = pastaIds[0]; // seleção única (pela UI nova)
+                    if (!projectKey || !folderId) {
+                        throw new Error('Projeto e pasta são obrigatórios.');
+                    }
+                    // Chame seu comando que retorna os testes de UMA pasta.
+                    // Se o seu já aceita múltiplas pastas, passe o array completo.
+                    // Ajuste o nome do command se o seu for diferente.
+                    const rawTests = yield vscode.commands.executeCommand('plugin-vscode.getZephyrTestsByFolder', projectKey, folderId, { recursive: false } // se quiser incluir subpastas, troque para true no seu command
+                    );
+                    const testesZephyr = (Array.isArray(rawTests) ? rawTests : []).map(mapZephyrTestsForWebview);
+                    // Enviamos direto no formato que a webview já trata e renderiza
+                    panel.webview.postMessage({
+                        type: 'zephyrDataProjeto',
+                        zephyrDataProjeto: { testesZephyr },
+                        projectKey,
+                        folderId
+                    });
+                }
+                catch (e) {
+                    vscode.window.showErrorMessage(`Erro ao carregar testes da pasta: ${(e === null || e === void 0 ? void 0 : e.message) || e}`);
+                    panel.webview.postMessage({
+                        type: 'zephyrDataProjeto',
+                        zephyrDataProjeto: { testesZephyr: [] },
+                        projectKey: message.projetoIdOuKey || '',
+                        folderId: (Array.isArray(message.pastaIds) && message.pastaIds[0]) || null
+                    });
+                }
+            }
         }));
         // Envia nome do usuário assim que carrega
         this.sendNomeUsuario();
@@ -326,3 +392,19 @@ class ZephyrPanel {
     }
 }
 exports.ZephyrPanel = ZephyrPanel;
+// (opcional, mas recomendado) — normaliza o shape dos testes pro que a webview espera
+function mapZephyrTestsForWebview(raw) {
+    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q;
+    if (!raw || typeof raw !== 'object')
+        return raw;
+    // Ajuste aqui conforme o shape real dos testes vindos do seu command
+    return {
+        key: (_c = (_b = (_a = raw.key) !== null && _a !== void 0 ? _a : raw.testKey) !== null && _b !== void 0 ? _b : raw.name) !== null && _c !== void 0 ? _c : 'SemKey',
+        version: (_e = (_d = raw.version) !== null && _d !== void 0 ? _d : raw.versionNumber) !== null && _e !== void 0 ? _e : 1,
+        details: {
+            name: (_h = (_g = (_f = raw.details) === null || _f === void 0 ? void 0 : _f.name) !== null && _g !== void 0 ? _g : raw.name) !== null && _h !== void 0 ? _h : '',
+            customFields: (_l = (_k = (_j = raw.details) === null || _j === void 0 ? void 0 : _j.customFields) !== null && _k !== void 0 ? _k : raw.customFields) !== null && _l !== void 0 ? _l : {}
+        },
+        script: (_q = (_p = (_m = raw.script) !== null && _m !== void 0 ? _m : (_o = raw.steps) === null || _o === void 0 ? void 0 : _o.gherkin) !== null && _p !== void 0 ? _p : raw.steps) !== null && _q !== void 0 ? _q : ''
+    };
+}

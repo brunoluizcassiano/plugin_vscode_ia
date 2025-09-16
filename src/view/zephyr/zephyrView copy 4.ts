@@ -1,8 +1,5 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.getZephyrViewContent = void 0;
-function getZephyrViewContent() {
-    return `
+export function getZephyrViewContent(): string {
+  return `
   <!DOCTYPE html>
   <html lang="pt-br">
   <head>
@@ -154,118 +151,7 @@ function getZephyrViewContent() {
   .folder-tree .leaf:hover, .folder-tree summary:hover { background:#333; }
   .folder-tree .selected { background:#0d47a1; color:#fff; }
   .actions-row { display:flex; gap:.5rem; justify-content:flex-start; margin-top:.75rem; }
-  
-/* === Dark Zephyr folder tree layout override (non-breaking) === */
-:root {
-  --bg: #2b2d30;
-  --panel: #1f2124;
-  --text: #d7dae0;
-  --muted: #9aa0a6;
-  --hover: #33373a;
-  --select-bg: #094771;
-  --select-fg: #ffffff;
-  --guide: #3a3e42;
-  --border: #2f3336;
-}
-
-/* Tree container keeps your structure/classes; only visuals are changed */
-.folder-tree {
-  margin-top: .25rem;
-  font-size: 13px;
-  line-height: 1.6;
-  user-select: none;
-  color: var(--text);
-}
-
-/* vertical guide like IDEs */
-.folder-tree details {
-  position: relative;
-  margin-left: .25rem;
-  padding-left: .75rem;
-}
-.folder-tree details::before {
-  content: "";
-  position: absolute;
-  left: .25rem;
-  top: 0; bottom: 0;
-  width: 1px;
-  background: var(--guide);
-  opacity: .6;
-}
-
-/* clean summary row + caret */
-.folder-tree summary {
-  cursor: pointer;
-  list-style: none;
-  outline: none;
-  display: flex;
-  align-items: center;
-  gap: .4rem;
-  padding: .25rem .45rem;
-  border-radius: 6px;
-  position: relative;
-}
-.folder-tree summary::-webkit-details-marker { display: none; }
-.folder-tree summary::before {
-  content: "";
-  width: 0; height: 0;
-  border-left: 5px solid var(--muted);
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  transform: rotate(-90deg);
-  transition: transform .15s ease, border-left-color .15s ease;
-  margin-right: .1rem;
-}
-.folder-tree details[open] > summary::before {
-  transform: rotate(0deg);
-  border-left-color: var(--text);
-}
-
-/* file rows */
-.folder-tree .leaf {
-  padding: .25rem .45rem;
-  border-radius: 6px;
-  cursor: pointer;
-  margin-left: 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: .45rem;
-}
-
-/* subtle connector lines */
-.folder-tree details + .leaf,
-.folder-tree details + details { margin-top: .15rem; }
-.folder-tree details[open] > *:not(summary) { position: relative; }
-.folder-tree details[open] > *:not(summary)::before {
-  content: "";
-  position: absolute;
-  left: -0.5rem;
-  top: 0.8em;
-  width: .75rem;
-  height: 1px;
-  background: var(--guide);
-  opacity: .5;
-}
-
-/* hovers/selection keep your semantics (.selected) */
-.folder-tree .leaf:hover,
-.folder-tree summary:hover { background: var(--hover); }
-.folder-tree .selected {
-  background: var(--select-bg);
-  color: var(--select-fg);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
-}
-
-/* actions row keeps your class; just a subtle top border for separation */
-.actions-row {
-  display: flex;
-  gap: .5rem;
-  justify-content: flex-start;
-  margin-top: .75rem;
-  padding-top: .5rem;
-  border-top: 1px solid var(--border);
-}
-</style>
+  </style>
   </head>
   <body>
   <div id="loading">
@@ -1137,37 +1023,7 @@ function getZephyrViewContent() {
     
     if (message.type === 'novoId') {
       mostrarLoading();
-      nomeRecebid
-// === Expand/Collapse buttons for Zephyr folder tree (no logic changes) ===
-(function () {
-  function setAllDetails(open) {
-    document.querySelectorAll(".folder-tree details").forEach(d => d.open = open);
-  }
-  function makeBtn(text, id) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.id = id;
-    b.textContent = text;
-    return b;
-  }
-  function injectButtons() {
-    const bar = document.querySelector(".actions-row");
-    if (!bar) return;
-    if (bar.querySelector("#btnExpandirTudo") || bar.querySelector("#btnRecolherTudo")) return;
-    const btnExpand = makeBtn("Expandir tudo", "btnExpandirTudo");
-    const btnCollapse = makeBtn("Recolher tudo", "btnRecolherTudo");
-    btnExpand.addEventListener("click", () => setAllDetails(true));
-    btnCollapse.addEventListener("click", () => setAllDetails(false));
-    bar.prepend(btnCollapse);
-    bar.prepend(btnExpand);
-  }
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", injectButtons);
-  } else {
-    injectButtons();
-  }
-})();
-o = false;
+      nomeRecebido = false;
       testesRecebido = false;
       document.getElementById('issueHeader').innerHTML = '';
       document.getElementById('issueTests').innerHTML = '';
@@ -1235,4 +1091,3 @@ o = false;
   </html>
   `;
 }
-exports.getZephyrViewContent = getZephyrViewContent;
