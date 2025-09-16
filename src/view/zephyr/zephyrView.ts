@@ -165,7 +165,6 @@ export function getZephyrViewContent(): string {
   --border: #2f3336;
 }
 
-/* Tree container keeps your structure/classes; only visuals are changed */
 .folder-tree {
   margin-top: .25rem;
   font-size: 13px;
@@ -173,8 +172,6 @@ export function getZephyrViewContent(): string {
   user-select: none;
   color: var(--text);
 }
-
-/* vertical guide like IDEs */
 .folder-tree details {
   position: relative;
   margin-left: .25rem;
@@ -189,8 +186,6 @@ export function getZephyrViewContent(): string {
   background: var(--guide);
   opacity: .6;
 }
-
-/* clean summary row + caret */
 .folder-tree summary {
   cursor: pointer;
   list-style: none;
@@ -217,8 +212,6 @@ export function getZephyrViewContent(): string {
   transform: rotate(0deg);
   border-left-color: var(--text);
 }
-
-/* file rows */
 .folder-tree .leaf {
   padding: .25rem .45rem;
   border-radius: 6px;
@@ -228,8 +221,6 @@ export function getZephyrViewContent(): string {
   align-items: center;
   gap: .45rem;
 }
-
-/* subtle connector lines */
 .folder-tree details + .leaf,
 .folder-tree details + details { margin-top: .15rem; }
 .folder-tree details[open] > *:not(summary) { position: relative; }
@@ -243,8 +234,6 @@ export function getZephyrViewContent(): string {
   background: var(--guide);
   opacity: .5;
 }
-
-/* hovers/selection keep your semantics (.selected) */
 .folder-tree .leaf:hover,
 .folder-tree summary:hover { background: var(--hover); }
 .folder-tree .selected {
@@ -253,7 +242,7 @@ export function getZephyrViewContent(): string {
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
 }
 
-/* actions row keeps your class; just a subtle top border for separation */
+/* Keep actions-row layout; add subtle divider if not already styled */
 .actions-row {
   display: flex;
   gap: .5rem;
@@ -262,6 +251,21 @@ export function getZephyrViewContent(): string {
   padding-top: .5rem;
   border-top: 1px solid var(--border);
 }
+
+/* Optional: basic button style if none exists */
+.actions-row .btn {
+  background: #2d333b;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: .35rem .7rem;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, transform .02s;
+}
+.actions-row .btn:hover { background: #3a4048; border-color: #3c4247; }
+.actions-row .btn:active { transform: translateY(1px); }
+
 </style>
   </head>
   <body>
@@ -1134,37 +1138,7 @@ export function getZephyrViewContent(): string {
     
     if (message.type === 'novoId') {
       mostrarLoading();
-      nomeRecebid
-// === Expand/Collapse buttons for Zephyr folder tree (no logic changes) ===
-(function () {
-  function setAllDetails(open) {
-    document.querySelectorAll(".folder-tree details").forEach(d => d.open = open);
-  }
-  function makeBtn(text, id) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.id = id;
-    b.textContent = text;
-    return b;
-  }
-  function injectButtons() {
-    const bar = document.querySelector(".actions-row");
-    if (!bar) return;
-    if (bar.querySelector("#btnExpandirTudo") || bar.querySelector("#btnRecolherTudo")) return;
-    const btnExpand = makeBtn("Expandir tudo", "btnExpandirTudo");
-    const btnCollapse = makeBtn("Recolher tudo", "btnRecolherTudo");
-    btnExpand.addEventListener("click", () => setAllDetails(true));
-    btnCollapse.addEventListener("click", () => setAllDetails(false));
-    bar.prepend(btnCollapse);
-    bar.prepend(btnExpand);
-  }
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", injectButtons);
-  } else {
-    injectButtons();
-  }
-})();
-o = false;
+      nomeRecebido = false;
       testesRecebido = false;
       document.getElementById('issueHeader').innerHTML = '';
       document.getElementById('issueTests').innerHTML = '';
@@ -1227,7 +1201,66 @@ o = false;
   loadFormState();
   applyZephyrKeys();
   rehydrateAllFolderSelections();
-  </script>
+  
+
+// === Add "Expandir/Recolher tudo" buttons (robust, no logic changes) ===
+(function () {
+  function setAllDetails(open) {
+    document.querySelectorAll(".folder-tree details").forEach(d => d.open = open);
+  }
+  function makeBtn(text, id) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.id = id;
+    b.className = "btn";
+    b.textContent = text;
+    return b;
+  }
+  function addButtonsTo(bar) {
+    if (!bar) return;
+    if (!bar.querySelector("#btnExpandirTudo")) {
+      const btnExpand = makeBtn("Expandir tudo", "btnExpandirTudo");
+      btnExpand.addEventListener("click", () => setAllDetails(true));
+      bar.prepend(btnExpand);
+    }
+    if (!bar.querySelector("#btnRecolherTudo")) {
+      const btnCollapse = makeBtn("Recolher tudo", "btnRecolherTudo");
+      btnCollapse.addEventListener("click", () => setAllDetails(false));
+      bar.prepend(btnCollapse);
+    }
+  }
+  function ensureButtons() {
+    // Preferir .actions-row existente
+    let bar = document.querySelector(".actions-row");
+    if (!bar) {
+      // Criar uma .actions-row logo após a árvore, se não existir
+      const tree = document.querySelector(".folder-tree");
+      if (tree && tree.parentElement) {
+        bar = document.createElement("div");
+        bar.className = "actions-row";
+        if (tree.nextSibling) {
+          tree.parentElement.insertBefore(bar, tree.nextSibling);
+        } else {
+          tree.parentElement.appendChild(bar);
+        }
+      }
+    }
+    addButtonsTo(bar);
+  }
+  // Rodar agora...
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", ensureButtons);
+  } else {
+    ensureButtons();
+  }
+  // ... e observar mudanças (caso a árvore seja renderizada depois)
+  const mo = new MutationObserver(() => ensureButtons());
+  mo.observe(document.documentElement, { childList: true, subtree: true });
+  // ... e após mensagens (padrão em Webviews)
+  window.addEventListener("message", () => setTimeout(ensureButtons, 0));
+})();
+
+</script>
   </body>
   </html>
   `;
