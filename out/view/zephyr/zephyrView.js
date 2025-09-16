@@ -269,6 +269,70 @@ function getZephyrViewContent() {
 .actions-row .btn:hover { background: #3a4048; border-color: #3c4247; }
 .actions-row .btn:active { transform: translateY(1px); }
 
+
+/* === Zephyr Filters Panel === */
+.filters-panel {
+  background-color: #2d2d2d;
+  border: 1px solid #444;
+  border-radius: 10px;
+  padding: .75rem;
+  margin: .75rem 0;
+  color: #fff;
+}
+.filters-panel .filters-title {
+  font-weight: 600;
+  margin-bottom: .5rem;
+  color: #4fc3f7;
+}
+.filters-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: .65rem .75rem;
+}
+@media (min-width: 980px) {
+  .filters-grid { grid-template-columns: repeat(3, minmax(220px, 1fr)); }
+}
+.filters-grid .field label {
+  display: block;
+  font-size: 12px;
+  color: #bbb;
+  margin-bottom: .25rem;
+}
+.filters-grid .field select,
+.filters-grid .field input {
+  width: 95%;
+  border: 1px solid #444;
+  background: #1f1f1f;
+  color: #fff;
+  border-radius: 8px;
+  padding: .45rem .6rem;
+  font-size: 13px;
+  outline: none;
+}
+.filters-grid .field select:focus,
+.filters-grid .field input:focus {
+  border-color: #666;
+  box-shadow: 0 0 0 2px rgba(79,195,247,.25);
+}
+.filters-row-actions {
+  margin-top: .5rem;
+  display: flex;
+  gap: .5rem;
+  justify-content: flex-end;
+}
+.filters-row-actions .btn {
+  background: #2d333b;
+  color: #fff;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: .35rem .7rem;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, transform .02s;
+}
+.filters-row-actions .btn:hover { background: #3a4048; border-color: #555; }
+.filters-row-actions .btn:active { transform: translateY(1px); }
+
 </style>
   </head>
   <body>
@@ -296,6 +360,61 @@ function getZephyrViewContent() {
       <div id="projectStructure" style="display:none; margin-top:1rem;">
         <div>
           <div class="muted">Estrutura de pastas (Zephyr)</div>
+          
+          <!-- Filtros (Zephyr) -->
+          <div id="filtersPanel" class="filters-panel">
+            <div class="filters-title">Filtros</div>
+            <div class="filters-grid">
+              <div class="field">
+                <label for="fltAutomationStatus">Automation status</label>
+                <select id="fltAutomationStatus">
+                  <option value="">Qualquer</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="fltStatus">Status</label>
+                <select id="fltStatus">
+                  <option value="">Qualquer</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="fltCoverage">Coverage</label>
+                <select id="fltCoverage">
+                  <option value="">Qualquer</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="fltTestType">Test Type</label>
+                <select id="fltTestType">
+                  <option value="">Qualquer</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="fltTestClass">Test Class</label>
+                <select id="fltTestClass">
+                  <option value="">Qualquer</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="fltTestGroup">Test Group</label>
+                <select id="fltTestGroup">
+                  <option value="">Qualquer</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="fltLabel">Label</label>
+                <input id="fltLabel" type="text" placeholder="ex.: smoke, release-25.3" />
+              </div>
+              <div class="field">
+                <label for="fltOwner">Owner</label>
+                <input id="fltOwner" type="text" placeholder="ex.: bruno.cassiano" />
+              </div>
+            </div>
+            <div class="filters-row-actions">
+              <button id="btnClearFilters" type="button" class="btn">Limpar filtros</button>
+            </div>
+          </div>
+
           <div id="folderTree" class="folder-tree"></div>
         </div>
 
@@ -1134,7 +1253,24 @@ function getZephyrViewContent() {
             sugestoesIA[targetIdx].key = zephyrKey;
           }
         }
-      });
+    
+    if (message.type === 'zephyr:filtersOptions') {
+      const setOptions = (id, list) => {
+        const sel = document.getElementById(id);
+        if (!sel || !Array.isArray(list)) return;
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">Qualquer</option>' + list.map(v => '<option value="'+String(v)+'">'+String(v)+'</option>').join('');
+        if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+      };
+      const o = message.options || {};
+      setOptions('fltAutomationStatus', o.automationStatus);
+      setOptions('fltStatus',           o.status);
+      setOptions('fltCoverage',         o.coverage);
+      setOptions('fltTestType',         o.testType);
+      setOptions('fltTestClass',        o.testClass);
+      setOptions('fltTestGroup',        o.testGroup);
+    }
+  });
       const st = vscode.getState();
       vscode.setState({ ...st, sugestoesIA });
     }
@@ -1190,7 +1326,8 @@ function getZephyrViewContent() {
       type: 'aplicarFiltrosProjeto',
       projetoIdOuKey: _projetoSelecionado,
       pastaIds: getSelectedFolderIds(), // [id]
-      filtroIds: []                     // sem filtros
+      filtroIds: [],                    // sem filtros (compat)
+      filtros: getSelectedFilters()
     });
   });
 
@@ -1263,6 +1400,134 @@ function getZephyrViewContent() {
   window.addEventListener("message", () => setTimeout(ensureButtons, 0));
 })();
 
+
+  // === Filtros (helpers) ===
+  function getSelectedFilters(){
+    const val = (id) => {
+      const el = document.getElementById(id);
+      return el ? (el.value || '').trim() : '';
+    };
+    return {
+      automationStatus: val('fltAutomationStatus'),
+      status:           val('fltStatus'),
+      coverage:         val('fltCoverage'),
+      owner:            val('fltOwner'),
+      testType:         val('fltTestType'),
+      testClass:        val('fltTestClass'),
+      testGroup:        val('fltTestGroup'),
+      label:            val('fltLabel'),
+    };
+  }
+  function clearFilters(){
+    ['fltAutomationStatus','fltStatus','fltCoverage','fltOwner','fltTestType','fltTestClass','fltTestGroup','fltLabel']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  }
+  (function bindClearFilters(){
+    function bind(){
+      const btn = document.getElementById('btnClearFilters');
+      if (btn && !btn._bound){
+        btn.addEventListener('click', clearFilters);
+        btn._bound = true;
+      }
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+    else bind();
+  })();
+
+/* === Filtros: requisitar opções ao painel e preencher selects === */
+(function zephyrFiltersBootstrap(){
+  // Evita duplicar
+  if (window.__zephyrFiltersBootstrap__) return;
+  window.__zephyrFiltersBootstrap__ = true;
+
+  function getVs(){
+    try { return (typeof acquireVsCodeApi === 'function') ? acquireVsCodeApi() : null; }
+    catch { return null; }
+  }
+
+  // Pede opções com o mesmo contexto usado por "Aplicar Seleção"
+  function requestFiltersOptionsNow(){
+    try {
+      const vs = getVs();
+      if (!vs) return;
+
+      // Tente recuperar o projectKey do(s) mesmo(s) lugar(es) usado(s) no seu fluxo
+      const projetoIdOuKey =
+        (window._projetoSelecionado) ||
+        (window.projectFlow && window.projectFlow.projectKey) ||
+        (window.projectKey) ||
+        '';
+
+      // Use a função existente para pegar a pasta selecionada
+      const pastaIds = (typeof getSelectedFolderIds === 'function')
+        ? getSelectedFolderIds()
+        : [];
+
+      if (!projetoIdOuKey || !pastaIds || !pastaIds.length) return;
+
+      vs.postMessage({
+        type: 'zephyr:requestFiltersOptions',
+        projetoIdOuKey,
+        pastaIds
+      });
+    } catch {}
+  }
+
+  // Popular cada <select>
+  function setOptions(id, list){
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const cur = sel.value;
+    const items = Array.isArray(list) ? list : [];
+    sel.innerHTML = '<option value=\"\">Qualquer</option>' +
+      items.map(v => '<option value=\"'+String(v)+'\">'+String(v)+'</option>').join('');
+    // preserva seleção anterior quando possível
+    try {
+      if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+    } catch {}
+  }
+
+  // Listener adicional (não mexe no seu existente)
+  window.addEventListener('message', (event) => {
+    const message = event.data || {};
+    if (message.type === 'zephyr:filtersOptions') {
+      const o = message.options || {};
+      setOptions('fltAutomationStatus', o.automationStatus);
+      setOptions('fltStatus',           o.status);
+      setOptions('fltCoverage',         o.coverage);
+      setOptions('fltTestType',         o.testType);
+      setOptions('fltTestClass',        o.testClass);
+      setOptions('fltTestGroup',        o.testGroup);
+      // Owner e Label permanecem como inputs texto
+    }
+    // quando os dados do projeto chegam/atualizam, pedimos as opções da pasta atual
+    if (message.type === 'zephyrDataProjeto') {
+      setTimeout(requestFiltersOptionsNow, 0);
+    }
+  });
+
+  // Quando a pasta selecionada muda, pedimos as opções novamente
+  function wireFolderSelectionChange(){
+    // tente pelo id conhecido; se não existir, use o container com a classe
+    const tree = document.getElementById('folderTree') || document.querySelector('.folder-tree');
+    if (!tree) return;
+    tree.addEventListener('click', () => setTimeout(requestFiltersOptionsNow, 0));
+    tree.addEventListener('keydown', (ev) => {
+      // Enter/Espaço normalmente mudam seleção nos seus itens
+      if (ev.key === 'Enter' || ev.key === ' ') setTimeout(requestFiltersOptionsNow, 0);
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      wireFolderSelectionChange();
+      requestFiltersOptionsNow();
+    });
+  } else {
+    wireFolderSelectionChange();
+    requestFiltersOptionsNow();
+  }
+})();
 </script>
   </body>
   </html>
