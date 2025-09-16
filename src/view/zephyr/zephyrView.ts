@@ -365,6 +365,7 @@ export function getZephyrViewContent(): string {
               <div class="field">
                 <label for="fltAutomationStatus">Automation status</label>
                 <select id="fltAutomationStatus">
+                  <option value="">N/A</option>
                   <option value="">Automated</option>
                   <option value="">Not Automated</option>
                   <option value="">Not Applicable</option>
@@ -373,6 +374,7 @@ export function getZephyrViewContent(): string {
               <div class="field">
                 <label for="fltStatus">Status</label>
                 <select id="fltStatus">
+                  <option value="">N/A</option>
                   <option value="">Approved</option>
                   <option value="">Deprecated</option>
                   <option value="">Draft</option>
@@ -381,6 +383,7 @@ export function getZephyrViewContent(): string {
               <div class="field">
                 <label for="fltTestType">Test Type</label>
                 <select id="fltTestType">
+                  <option value="">N/A</option>
                   <option value="">Acceptance</option>
                   <option value="">End To End</option>
                   <option value="">Regression</option>
@@ -393,6 +396,7 @@ export function getZephyrViewContent(): string {
               <div class="field">
                 <label for="fltTestClass">Test Class</label>
                 <select id="fltTestClass">
+                  <option value="">N/A</option>
                   <option value="">Positive</option>
                   <option value="">Negative</option>
                 </select>
@@ -400,6 +404,7 @@ export function getZephyrViewContent(): string {
               <div class="field">
                 <label for="fltTestGroup">Test Group</label>
                 <select id="fltTestGroup">
+                  <option value="">N/A</option>
                   <option value="">Backend</option>
                   <option value="">Desktop</option>
                   <option value="">Front-End</option>
