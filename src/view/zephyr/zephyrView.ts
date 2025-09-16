@@ -365,46 +365,45 @@ export function getZephyrViewContent(): string {
               <div class="field">
                 <label for="fltAutomationStatus">Automation status</label>
                 <select id="fltAutomationStatus">
-                  <option value="">Qualquer</option>
+                  <option value="">Automated</option>
+                  <option value="">Not Automated</option>
+                  <option value="">Not Applicable</option>
                 </select>
               </div>
               <div class="field">
                 <label for="fltStatus">Status</label>
                 <select id="fltStatus">
-                  <option value="">Qualquer</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="fltCoverage">Coverage</label>
-                <select id="fltCoverage">
-                  <option value="">Qualquer</option>
+                  <option value="">Approved</option>
+                  <option value="">Deprecated</option>
+                  <option value="">Draft</option>
                 </select>
               </div>
               <div class="field">
                 <label for="fltTestType">Test Type</label>
                 <select id="fltTestType">
-                  <option value="">Qualquer</option>
+                  <option value="">Acceptance</option>
+                  <option value="">End To End</option>
+                  <option value="">Regression</option>
+                  <option value="">Sanity</option>
+                  <option value="">Security</option>
+                  <option value="">Performance</option>
+                  <option value="">UI</option>
                 </select>
               </div>
               <div class="field">
                 <label for="fltTestClass">Test Class</label>
                 <select id="fltTestClass">
-                  <option value="">Qualquer</option>
+                  <option value="">Positive</option>
+                  <option value="">Negative</option>
                 </select>
               </div>
               <div class="field">
                 <label for="fltTestGroup">Test Group</label>
                 <select id="fltTestGroup">
-                  <option value="">Qualquer</option>
+                  <option value="">Backend</option>
+                  <option value="">Desktop</option>
+                  <option value="">Front-End</option>
                 </select>
-              </div>
-              <div class="field">
-                <label for="fltLabel">Label</label>
-                <input id="fltLabel" type="text" placeholder="ex.: smoke, release-25.3" />
-              </div>
-              <div class="field">
-                <label for="fltOwner">Owner</label>
-                <input id="fltOwner" type="text" placeholder="ex.: bruno.cassiano" />
               </div>
             </div>
             <div class="filters-row-actions">
