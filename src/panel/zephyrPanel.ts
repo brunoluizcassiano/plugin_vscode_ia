@@ -9,6 +9,76 @@ type Selecionado = {
   issueId?: string;
   issueKey?: string;
 };
+
+// ===== Helpers: aplicar filtros somente para SELECTs (sem Coverage/Owner/Label) =====
+function _zNorm(v: any): string {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'string') return v.trim();
+  return String(v).trim();
+}
+function _zEqualsCi(a: any, b: any): boolean {
+  return _zNorm(a).toLowerCase() === _zNorm(b).toLowerCase();
+}
+function _zFrom(t: any, keys: string[], cfKeys: string[] = []): string {
+  for (const k of keys) {
+    const v = (t as any)?.[k];
+    if (v !== undefined && v !== null && v !== '') return _zNorm(v);
+  }
+  const cf = (t as any)?.details?.customFields ?? (t as any)?.customFields;
+  if (cf && typeof cf === 'object') {
+    for (const name of cfKeys) {
+      const c = (cf as any)[name] ?? (cf as any)[name?.toLowerCase?.()] ?? (cf as any)[name?.toUpperCase?.()];
+      if (c !== undefined && c !== null && c !== '') return _zNorm(c);
+    }
+  }
+  return '';
+}
+function _zNormAutomation(s: string): string {
+  const v = _zNorm(s).toLowerCase();
+  if (!v || v === 'n/a') return '';
+  if (v === 'automated' || v === 'automation') return 'automated';
+  if (v === 'not automated' || v === 'not automation' || v === 'manual') return 'not automated';
+  if (v === 'not applicable') return 'not applicable';
+  return v;
+}
+/**
+ * Aplica SOMENTE os filtros dos SELECTs cujo valor != 'N/A'
+ * Campos: automationStatus, status, testType, testClass, testGroup
+ */
+function applyZephyrSelectFilters(rawTests: any[], filtros: any): any[] {
+  if (!Array.isArray(rawTests) || !filtros || typeof filtros !== 'object') return rawTests || [];
+
+  const sel = {
+    automationStatus: _zNorm((filtros as any).automationStatus),
+    status:           _zNorm((filtros as any).status),
+    testType:         _zNorm((filtros as any).testType),
+    testClass:        _zNorm((filtros as any).testClass),
+    testGroup:        _zNorm((filtros as any).testGroup),
+  };
+  const use = (val: string) => (val && val.toUpperCase() !== 'N/A');
+
+  const out: any[] = [];
+  for (const t of rawTests) {
+    const aut    = _zNormAutomation(_zFrom(t, ['automationStatus','automation','automated'], ['Automation status','Automation Status','Automação']));
+    const stat   = _zFrom(t, ['status','state'], ['Status']);
+    const ttype  = _zFrom(t, ['testType','type'], ['Test Type','Tipo']);
+    const tclass = _zFrom(t, ['testClass','class'], ['Test Class','Classe']);
+    const tgroup = _zFrom(t, ['testGroup','group'], ['Test Group','Grupo']);
+
+    if (use(sel.automationStatus)) {
+      const want = _zNormAutomation(sel.automationStatus);
+      if (!want || want !== aut) continue;
+    }
+    if (use(sel.status)    && !_zEqualsCi(stat,   sel.status))    continue;
+    if (use(sel.testType)  && !_zEqualsCi(ttype,  sel.testType))  continue;
+    if (use(sel.testClass) && !_zEqualsCi(tclass, sel.testClass)) continue;
+    if (use(sel.testGroup) && !_zEqualsCi(tgroup, sel.testGroup)) continue;
+
+    out.push(t);
+  }
+  return out;
+}
+
 export class ZephyrPanel {
   public static currentPanel: ZephyrPanel | undefined;
   private readonly _panel: vscode.WebviewPanel;
@@ -279,13 +349,13 @@ export class ZephyrPanel {
           );
 
           // Devolve para a webview exatamente no formato que ela espera
-          panel.webview.postMessage({
+          this._panel.webview.postMessage({
             type: 'projetosJira',
             projects: Array.isArray(projects) ? projects : []
           });
         } catch (err: any) {
           vscode.window.showErrorMessage(`Erro ao listar projetos do Jira: ${err?.message || err}`);
-          panel.webview.postMessage({ type: 'projetosJira', projects: [] });
+          this._panel.webview.postMessage({ type: 'projetosJira', projects: [] });
         }
       } else if (message.type === 'carregarEstruturaProjeto'){
         try {
@@ -295,7 +365,7 @@ export class ZephyrPanel {
               projectKey // já é a KEY
             );
 
-            panel.webview.postMessage({
+            this._panel.webview.postMessage({
               type: 'estruturaProjeto',
               folders: resultado?.folders || [], // árvore
               flat: resultado?.flat || [],       // lista plana (se quiser usar)
@@ -303,48 +373,10 @@ export class ZephyrPanel {
             });
           } catch (e: any) {
             vscode.window.showErrorMessage(`Erro ao carregar estrutura do projeto: ${e.message || e}`);
-            panel.webview.postMessage({ type: 'estruturaProjeto', folders: [], flat: [], projectKey: '' });
+            this._panel.webview.postMessage({ type: 'estruturaProjeto', folders: [], flat: [], projectKey: '' });
           }
       }else if (message.type === 'aplicarFiltrosProjeto') {
-        // // 👉 novo caso: ao aplicar seleção, buscar "todos os testes que estão naquela pasta"
-        // try {
-        //   const projectKey: string = message.projetoIdOuKey || '';
-        //   const pastaIds: string[] = Array.isArray(message.pastaIds) ? message.pastaIds : [];
-        //   const folderId = pastaIds[0]; // seleção única (pela UI nova)
-
-        //   if (!projectKey || !folderId) {
-        //     throw new Error('Projeto e pasta são obrigatórios.');
-        //   }
-
-        //   // Chame seu comando que retorna os testes de UMA pasta.
-        //   // Se o seu já aceita múltiplas pastas, passe o array completo.
-        //   // Ajuste o nome do command se o seu for diferente.
-        //   const rawTests = await vscode.commands.executeCommand<any[]>(
-        //     'plugin-vscode.getZephyrTestsByFolder',
-        //     projectKey,
-        //     folderId,
-        //     { recursive: false } // se quiser incluir subpastas, troque para true no seu command
-        //   );
-
-        //   const testesZephyr = (Array.isArray(rawTests) ? rawTests : []).map(mapZephyrTestsForWebview);
-
-        //   // Enviamos direto no formato que a webview já trata e renderiza
-        //   panel.webview.postMessage({
-        //     type: 'zephyrDataProjeto',
-        //     zephyrDataProjeto: { testesZephyr },
-        //     projectKey,
-        //     folderId
-        //   });
-        // } catch (e: any) {
-        //   vscode.window.showErrorMessage(`Erro ao carregar testes da pasta: ${e?.message || e}`);
-        //   panel.webview.postMessage({
-        //     type: 'zephyrDataProjeto',
-        //     zephyrDataProjeto: { testesZephyr: [] },
-        //     projectKey: message.projetoIdOuKey || '',
-        //     folderId: (Array.isArray(message.pastaIds) && message.pastaIds[0]) || null
-        //   });
-        // }
-          // 👉 novo caso: ao aplicar seleção, buscar "todos os testes que estão naquela pasta"
+        // 👉 novo caso: ao aplicar seleção, buscar "todos os testes que estão naquela pasta"
         try {
           const projectKey: string = message.projetoIdOuKey || '';
           const pastaIds: string[] = Array.isArray(message.pastaIds) ? message.pastaIds : [];
@@ -364,10 +396,11 @@ export class ZephyrPanel {
             { recursive: false } // se quiser incluir subpastas, troque para true no seu command
           );
 
-          const filtros = (message && message.filtros) ? message.filtros : {};
-const _filtered = applyZephyrFilters(Array.isArray(rawTests) ? rawTests : [], filtros);
-const testesZephyr = (Array.isArray(_filtered) ? _filtered : []).map(mapZephyrTestsForWebview);
-// Enviamos direto no formato que a webview já trata e renderiza
+          const filtros = (message && (message as any).filtros) ? (message as any).filtros : {};
+const _raw = Array.isArray(rawTests) ? rawTests : [];
+const testesZephyr = applyZephyrSelectFilters(_raw, filtros).map(mapZephyrTestsForWebview);
+
+          // Enviamos direto no formato que a webview já trata e renderiza
           this._panel.webview.postMessage({
             type: 'zephyrDataProjeto',
             zephyrDataProjeto: { testesZephyr },
@@ -467,70 +500,3 @@ function mapZephyrTestsForWebview(raw: any): any {
     script: raw.script ?? raw.steps?.gherkin ?? raw.steps ?? ''
   };
 }
-
-// === Helpers de filtro (aplicados no painel antes de enviar à view) ===
-function _norm(v: any): string {
-  if (v === null || v === undefined) return '';
-  if (typeof v === 'string') return v.trim();
-  return String(v).trim();
-}
-function _get(obj: any, keys: string[]): string {
-  for (const k of keys) {
-    const v = obj?.[k];
-    if (v !== undefined && v !== null && v !== '') return _norm(v);
-  }
-  return '';
-}
-function _fromCustomFields(cf: any, names: string[]): string {
-  if (!cf || typeof cf !== 'object') return '';
-  for (const name of names) {
-    const c = cf[name] ?? cf[name.toLowerCase?.()] ?? cf[name.toUpperCase?.()];
-    if (c !== undefined && c !== null && c !== '') return _norm(c);
-  }
-  return '';
-}
-function matchesFilter(val: string|string[]|undefined, selected: string): boolean {
-  if (!selected) return true;
-  if (Array.isArray(val)) return val.map(_norm).includes(_norm(selected));
-  return _norm(val ?? '') === _norm(selected);
-}
-function ownerMatches(test: any, owner: string): boolean {
-  if (!owner) return true;
-  const owners = test?.owners || test?.owner || test?.details?.owner || test?.details?.customFields?.owner || test?.customFields?.owner;
-  if (Array.isArray(owners)) return owners.map(_norm).some(v => v.includes(_norm(owner)));
-  const single = _norm(owners);
-  return single ? single.includes(_norm(owner)) : false;
-}
-function testHasLabel(test: any, label: string): boolean {
-  if (!label) return true;
-  const labels = test?.labels || test?.details?.labels || test?.details?.customFields?.labels || test?.customFields?.labels;
-  if (Array.isArray(labels)) return labels.map(_norm).some(v => v.includes(_norm(label)));
-  const single = _get(test, ['label']) || _fromCustomFields(test?.details?.customFields ?? test?.customFields, ['Label']);
-  return single ? _norm(single).includes(_norm(label)) : false;
-}
-function applyZephyrFilters(rawTests: any[], filtros: any): any[] {
-  if (!Array.isArray(rawTests) || !filtros || typeof filtros !== 'object') return rawTests || [];
-  const out: any[] = [];
-  for (const t of rawTests) {
-    const cf = t?.details?.customFields ?? t?.customFields;
-    const automationStatus = _get(t, ['automationStatus','automation','automated']) || _fromCustomFields(cf, ['Automation status','Automation Status','Automação']);
-    const status           = _get(t, ['status','state']) || _fromCustomFields(cf, ['Status']);
-    const coverage         = _get(t, ['coverage']) || _fromCustomFields(cf, ['Coverage']);
-    const testType         = _get(t, ['testType','type']) || _fromCustomFields(cf, ['Test Type','Tipo']);
-    const testClass        = _get(t, ['testClass','class']) || _fromCustomFields(cf, ['Test Class','Classe']);
-    const testGroup        = _get(t, ['testGroup','group']) || _fromCustomFields(cf, ['Test Group','Grupo']);
-
-    if (!matchesFilter(automationStatus, filtros.automationStatus)) continue;
-    if (!matchesFilter(status,           filtros.status))           continue;
-    if (!matchesFilter(coverage,         filtros.coverage))         continue;
-    if (!matchesFilter(testType,         filtros.testType))         continue;
-    if (!matchesFilter(testClass,        filtros.testClass))        continue;
-    if (!matchesFilter(testGroup,        filtros.testGroup))        continue;
-    if (!ownerMatches(t, filtros.owner))                             continue;
-    if (!testHasLabel(t, filtros.label))                             continue;
-    out.push(t);
-  }
-  return out;
-}
-
-
