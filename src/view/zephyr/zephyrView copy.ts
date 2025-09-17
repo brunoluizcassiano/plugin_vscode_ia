@@ -549,10 +549,7 @@ export function getZephyrViewContent(): string {
     _todosProjetos = Array.isArray(list) ? list : [];
     projectFlow.select.innerHTML = '<option value="">Selecione...</option>' +
       _todosProjetos.map(p => '<option value="'+(p.id || p.key)+'">'+ (p.name || p.key || '') + (p.key ? ' ('+p.key+')' : '') +'</option>').join('');
-  
-  setAppState({ projetosCache: _todosProjetos });
-}
-
+  }
 
   /* ========= Árvore de pastas (sem checkbox) ========= */
 
@@ -608,8 +605,6 @@ export function getZephyrViewContent(): string {
   }
 
   function selectFolderById(id){
-    // persist selected folder id
-    setAppState({ selectedFolderId: id });
     _selectedFolderId = id;
     projectFlow.btnApply.disabled = !id;
 
@@ -1164,78 +1159,16 @@ export function getZephyrViewContent(): string {
   }
   
   /* ===================== Boot ====================== */
-  const state = vscode.getState() || {};
-
-  // Reidrata dados gerais (se existirem)
-  if (state?.nome) {
-    const el = document.getElementById('ola');
-    if (el) el.textContent = '👋 Olá ' + state.nome;
-    nomeRecebido = true;
-  }
-  if (state?.pastasPrincipaisCache) pastasPrincipaisCache = state.pastasPrincipaisCache;
+  const state = vscode.getState();
+  if (state?.nome) { document.getElementById('ola').textContent = '👋 Olá ' + state.nome; nomeRecebido = true; }
+  if (state?.pastasPrincipaisCache) { pastasPrincipaisCache = state.pastasPrincipaisCache; }
   if (state?.zephyrData) { renderDados(state.zephyrData); testesRecebido = true; }
   if (state?.sugestoesIA) { sugestoesIA = state.sugestoesIA; mostrarSugestoesIA(); }
-
-  // Ids da issue (podem não existir)
-  issueId  = state?.issueId  || '';
-  issueKey = state?.issueKey || '';
-  const hasIssue = Boolean(issueId || issueKey);
-// Restaura lista de projetos (cache)
-if (Array.isArray(state.projetosCache) && state.projetosCache.length) {
-  // popula o <select> com os projetos em cache
-  mountProjetos(state.projetosCache);
-}
-
-
-  // Restaura seleção do fluxo por Projeto (se existir)
-  if (state?.projetoSelecionado && projectFlow.select) {
-    _projetoSelecionado = state.projetoSelecionado;
-    projectFlow.select.value = _projetoSelecionado;
-  }
-  if (Array.isArray(pastasPrincipaisCache) && pastasPrincipaisCache.length) {
-    renderFolderTree(pastasPrincipaisCache);
-    if (state?.selectedFolderId) selectFolderById(state.selectedFolderId);
-  }
-
-  // --- Decisão de UI na entrada ---
-  if (hasIssue) {
-    // Modo "por issue"
-    tentarExibirConteudo();
-  } else {
-  try { esconderLoading(); } catch(e) {}
-
-    // Modo "por projeto/pasta"
-    showProjectFlow();
-
-    const precisaProjetos = !Array.isArray(_todosProjetos) || _todosProjetos.length === 0;
-    const temCachePastas  = Array.isArray(pastasPrincipaisCache) && pastasPrincipaisCache.length > 0;
-
-    // Só liga loading se vamos realmente buscar algo
-    if (precisaProjetos || (_projetoSelecionado && !temCachePastas)) {
-      setProjLoading(true, 'Carregando dados do projeto...');
-    }
-
-    // Busca projetos se necessário
-    if (precisaProjetos) {
-      vscode.postMessage({ type: 'carregarProjetos' });
-    }
-
-    // Se já tem projeto selecionado mas não tem pastas, busca estrutura
-    if (_projetoSelecionado && !temCachePastas) {
-      vscode.postMessage({ type: 'carregarEstruturaProjeto', projetoIdOuKey: _projetoSelecionado });
-    }
-
-    // Se já tem cache de pastas, mostra estrutura e desliga o loading
-    if (temCachePastas) {
-      renderFolderTree(pastasPrincipaisCache);
-      show(projectFlow.structure);
-      setProjLoading(false);
-    }
-  }
-
-  // ❌ Remova/Comente a linha abaixo se existir, pois não há handler no painel
-  // vscode.postMessage({ type: 'carregarNome' });
-
+  if (state?.issueId)  issueId  = state.issueId;
+  if (state?.issueKey) issueKey = state.issueKey;
+  
+  tentarExibirConteudo();
+  vscode.postMessage({ type: 'carregarNome' });
   
   /* ===================== Mensagens do host ====================== */
   window.addEventListener('message', event => {
@@ -1274,16 +1207,10 @@ if (Array.isArray(state.projetosCache) && state.projetosCache.length) {
       setProjLoading(false);
       mountProjetos(message.projects || []);
       showProjectFlow();
-      try { esconderLoading(); } catch(e) {}
-    
-  setAppState({ projetosCache: _todosProjetos });
-}
-
+    }
     if (message.type === 'estruturaProjeto') {
       setProjLoading(false);
       renderFolderTree(message.folders || []);
-  setAppState({ pastasPrincipaisCache: Array.isArray(message.folders) ? message.folders : [] });
-
       show(projectFlow.structure);
     }
     if (message.type === 'aplicarFiltrosProjeto:ok') {
@@ -1371,8 +1298,6 @@ if (Array.isArray(state.projetosCache) && state.projetosCache.length) {
   
   /* ===== Eventos do fluxo por Projeto ===== */
   if (projectFlow.select) projectFlow.select.addEventListener('change', () => {
-    // persist selected project
-    setAppState({ projetoSelecionado: projectFlow.select.value || '' });
     const val = projectFlow.select.value || '';
     _projetoSelecionado = val;
     _selectedFolderId = null;
