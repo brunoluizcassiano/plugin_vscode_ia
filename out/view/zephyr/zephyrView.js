@@ -1205,7 +1205,7 @@ if (Array.isArray(state.projetosCache) && state.projetosCache.length) {
     // Modo "por issue"
     tentarExibirConteudo();
   } else {
-  try { esconderLoading(); } catch(e) {}
+  // try { esconderLoading(); } catch(e) {}
 
     // Modo "por projeto/pasta"
     showProjectFlow();
@@ -1234,8 +1234,10 @@ if (Array.isArray(state.projetosCache) && state.projetosCache.length) {
       show(projectFlow.structure);
       setProjLoading(false);
     }
+
   }
 
+    try { esconderLoading(); } catch(e) {}
   // ❌ Remova/Comente a linha abaixo se existir, pois não há handler no painel
   // vscode.postMessage({ type: 'carregarNome' });
 

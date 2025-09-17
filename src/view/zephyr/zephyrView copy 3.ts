@@ -1180,12 +1180,11 @@ export function getZephyrViewContent(): string {
   issueId  = state?.issueId  || '';
   issueKey = state?.issueKey || '';
   const hasIssue = Boolean(issueId || issueKey);
-  
-  // Restaura lista de projetos (cache)
-  if (Array.isArray(state.projetosCache) && state.projetosCache.length) {
-    // popula o <select> com os projetos em cache
-    mountProjetos(state.projetosCache);
-  }
+// Restaura lista de projetos (cache)
+if (Array.isArray(state.projetosCache) && state.projetosCache.length) {
+  // popula o <select> com os projetos em cache
+  mountProjetos(state.projetosCache);
+}
 
 
   // Restaura seleção do fluxo por Projeto (se existir)
@@ -1203,7 +1202,7 @@ export function getZephyrViewContent(): string {
     // Modo "por issue"
     tentarExibirConteudo();
   } else {
-    // try { esconderLoading(); } catch(e) {}
+  try { esconderLoading(); } catch(e) {}
 
     // Modo "por projeto/pasta"
     showProjectFlow();
@@ -1232,7 +1231,6 @@ export function getZephyrViewContent(): string {
       show(projectFlow.structure);
       setProjLoading(false);
     }
-
   }
 
   // ❌ Remova/Comente a linha abaixo se existir, pois não há handler no painel
