@@ -513,6 +513,90 @@ function getZephyrViewContent() {
     loading: document.getElementById('projLoading'),
     empty: document.getElementById('projEmpty'),
   };
+
+  // IDs reais dos filtros
+  const FILTER_IDS = {
+    automationStatus: 'fltAutomationStatus',
+    status:           'fltStatus',
+    testType:         'fltTestType',
+    testClass:        'fltTestClass',
+    testGroup:        'fltTestGroup',
+    clearBtn:         'btnClearFilters',
+  };
+
+  // Nós DOM (JS puro – sem type assertions)
+  const $filters = {
+    automationStatus: document.getElementById(FILTER_IDS.automationStatus),
+    status:           document.getElementById(FILTER_IDS.status),
+    testType:         document.getElementById(FILTER_IDS.testType),
+    testClass:        document.getElementById(FILTER_IDS.testClass),
+    testGroup:        document.getElementById(FILTER_IDS.testGroup),
+    clearBtn:         document.getElementById(FILTER_IDS.clearBtn),
+  };
+
+  // Helpers
+  const NA = 'N/A';
+  function normalize(v){ return v === NA ? '' : (v || ''); }
+  function getFiltersFromUI() {
+    return {
+      automationStatus: normalize($filters.automationStatus && $filters.automationStatus.value),
+      status:           normalize($filters.status && $filters.status.value),
+      testType:         normalize($filters.testType && $filters.testType.value),
+      testClass:        normalize($filters.testClass && $filters.testClass.value),
+      testGroup:        normalize($filters.testGroup && $filters.testGroup.value),
+    };
+  }
+  function applyFiltersToUI(filters) {
+    if (!filters) return;
+    if ($filters.automationStatus) $filters.automationStatus.value = filters.automationStatus || NA;
+    if ($filters.status)           $filters.status.value           = filters.status || NA;
+    if ($filters.testType)         $filters.testType.value         = filters.testType || NA;
+    if ($filters.testClass)        $filters.testClass.value        = filters.testClass || NA;
+    if ($filters.testGroup)        $filters.testGroup.value        = filters.testGroup || NA;
+  }
+  function saveFiltersToState() {
+    const s = vscode.getState() || {};
+    vscode.setState({ ...s, filtros: getFiltersFromUI() });
+  }
+  function getFiltersFromState() {
+    const s = vscode.getState() || {};
+    return s.filtros || {};
+  }
+
+  // Encapsula binding (chame no Boot, depois de montar a UI)
+  function bindFilterListeners() {
+    [$filters.automationStatus, $filters.status, $filters.testType, $filters.testClass, $filters.testGroup]
+      .forEach((el) => {
+        if (!el) return;
+        el.addEventListener('change', () => {
+          saveFiltersToState();
+          if (_projetoSelecionado && _selectedFolderId) {
+            vscode.postMessage({
+              type: 'carregarTestesDaPasta',
+              projectKey: _projetoSelecionado,
+              folderId: _selectedFolderId,
+              filtros: getFiltersFromState(),
+            });
+          }
+        });
+      });
+
+    if ($filters.clearBtn) {
+      $filters.clearBtn.addEventListener('click', () => {
+        applyFiltersToUI({});
+        saveFiltersToState();
+        if (_projetoSelecionado && _selectedFolderId) {
+          vscode.postMessage({
+            type: 'carregarTestesDaPasta',
+            projectKey: _projetoSelecionado,
+            folderId: _selectedFolderId,
+            filtros: getFiltersFromState(),
+          });
+        }
+      });
+    }
+  }
+
   let _todosProjetos = [];
   let _projetoSelecionado = '';
   let _selectedFolderId = null;
@@ -1183,29 +1267,34 @@ function getZephyrViewContent() {
   issueId  = state?.issueId  || '';
   issueKey = state?.issueKey || '';
   const hasIssue = Boolean(issueId || issueKey);
-// Restaura lista de projetos (cache)
-if (Array.isArray(state.projetosCache) && state.projetosCache.length) {
-  // popula o <select> com os projetos em cache
-  mountProjetos(state.projetosCache);
-}
-
+  
+  // Restaura lista de projetos (cache)
+  if (Array.isArray(state.projetosCache) && state.projetosCache.length) {
+    // popula o <select> com os projetos em cache
+    mountProjetos(state.projetosCache);
+    try { esconderLoading(); } catch(e) {}
+  }
 
   // Restaura seleção do fluxo por Projeto (se existir)
   if (state?.projetoSelecionado && projectFlow.select) {
     _projetoSelecionado = state.projetoSelecionado;
     projectFlow.select.value = _projetoSelecionado;
+    try { esconderLoading(); } catch(e) {}
   }
+
   if (Array.isArray(pastasPrincipaisCache) && pastasPrincipaisCache.length) {
     renderFolderTree(pastasPrincipaisCache);
     if (state?.selectedFolderId) selectFolderById(state.selectedFolderId);
+    try { esconderLoading(); } catch(e) {}
   }
 
   // --- Decisão de UI na entrada ---
   if (hasIssue) {
+    
     // Modo "por issue"
     tentarExibirConteudo();
+
   } else {
-  // try { esconderLoading(); } catch(e) {}
 
     // Modo "por projeto/pasta"
     showProjectFlow();
@@ -1235,9 +1324,11 @@ if (Array.isArray(state.projetosCache) && state.projetosCache.length) {
       setProjLoading(false);
     }
 
+    if (state.filtros) applyFiltersToUI(state.filtros);
+    bindFilterListeners();
+    
   }
 
-    try { esconderLoading(); } catch(e) {}
   // ❌ Remova/Comente a linha abaixo se existir, pois não há handler no painel
   // vscode.postMessage({ type: 'carregarNome' });
 
