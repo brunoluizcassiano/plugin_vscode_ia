@@ -1,0 +1,340 @@
+/* ... (todo o SEU CSS original permanece idêntico) ... */
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background-color: #1e1e1e;
+    color: #ffffff;
+    padding: 2rem;
+  }
+  .container {
+    background-color: #2d2d2d;
+    padding: 2rem;
+    border-radius: 10px;
+    max-width: 800px;
+    margin: 0 auto;
+    display: none;
+  }
+  #loading { text-align: center; font-size: 1.2rem; margin-top: 100px; }
+  #loading img { width: 100px; margin-bottom: 1rem; }
+  h2 { margin-top: 0; color: #4fc3f7; }
+  textarea {
+    width: 95%;
+    background-color: #1e1e1e;
+    color: #ccc;
+    padding: 1rem;
+    border-radius: 6px;
+    border: 1px solid #444;
+    resize: vertical;
+    min-height: 100px;
+    margin-top: 1rem;
+    white-space: pre-wrap;
+    font-family: monospace;
+  }
+  .checkbox-container { display: flex; align-items: center; margin-top: 0.5rem; }
+  .checkbox-container input { margin-right: 0.5rem; }
+
+  /* Toolbar alinhada à esquerda */
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: flex-start;
+    margin-top: 1rem;
+  }
+  .toolbar button {
+    background-color: #007acc;
+    color: white;
+    padding: 0.6rem 1rem;
+    border: none;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    min-width: 200px;
+    text-align: center;
+    white-space: nowrap;
+    transition: background-color 0.25s;
+  }
+  .toolbar button:hover { background-color: #005f9e; }
+  button {
+    background-color: #007acc;
+    color: white;
+    padding: 0.6rem 1rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-top: 0.5rem;
+    margin-right: 0.5rem;
+    transition: background-color 0.2s;
+  }
+  button:hover { background-color: #005f9e; }
+  .btn--full { width:100%; justify-content:center; }
+  .issue-header p { margin: 0.3rem 0; color: #ccc; }
+
+  #iaLoading {
+    display: none;
+    margin-top: 2rem;
+    padding: 1rem;
+    background-color: #111;
+    border-left: 4px solid #fbc02d;
+    border-radius: 6px;
+    color: #fff176;
+    font-style: italic;
+  }
+
+  /* Limita apenas os selects da cascata dentro de cada sugestão */
+.sugestao select[id^="folder1-"],
+.sugestao select[id^="folder2-"],
+.sugestao select[id^="folder3-"] {
+  width: 120px;        /* ajuste fino aqui */
+  max-width: 100%;
+  display: inline-block;
+  margin-right: .4rem;
+}
+
+/* Opcional: quando escondidos (JS usa display none/inline-block), manter layout ok */
+.sugestao select[id^="folder2-"][style*="display:none"],
+.sugestao select[id^="folder3-"][style*="display:none"] {
+  width: 0; /* não ocupa espaço quando oculto */
+}
+
+  select {
+    width: 300px;
+    padding: 0.6rem;
+    border-radius: 6px;
+    border: none;
+    margin-bottom: 1rem;
+    background-color: #3c3c3c;
+    color: #ffffff;
+  }
+
+  /* ========= Form (mesmo padrão do backend) ========= */
+  .form {
+    display:none;
+    margin-top: 1rem;
+    background: #242424;
+    border: 1px solid #3b3b3b;
+    border-radius: 10px;
+    padding: 1rem;
+  }
+  .form__row {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: .85rem;
+  }
+  .form label { color:#ddd; }
+  .form input[type="text"] {
+    background-color: #3c3c3c;
+    color:#fff;
+    border:0;
+    border-radius:8px;
+    padding:.6rem .75rem;
+    width:95%;
+  }
+  .form textarea {
+    background-color: #3c3c3c;
+    color:#fff;
+    border:0;
+    border-radius:8px;
+    padding:.6rem .75rem;
+    width:95%;
+  }
+  .form .note { color:#aaa; font-size:.85rem; margin-left:180px; margin-top:-6px; margin-bottom:.75rem; }
+  .info { color:#9ad; margin-left:.5rem; }
+
+  /* ===== estilos mínimos do fluxo por Projeto ===== */
+  .row { display:flex; gap:.5rem; align-items:flex-end; flex-wrap:wrap; }
+  .col { flex:1; min-width: 240px; }
+  .muted { color:#ccc; font-size:.9rem; }
+
+  /* ====== Árvore de pastas (sem checkboxes) ====== */
+  .folder-tree { margin-top:.5rem; }
+  .folder-tree details { border-left:1px solid #444; margin-left:.5rem; padding-left:.5rem; }
+  .folder-tree summary {
+    cursor:pointer; padding:.3rem .5rem; border-radius:6px; outline:none; list-style:none;
+  }
+  .folder-tree summary::-webkit-details-marker { display:none; }
+  .folder-tree .leaf {
+    padding:.3rem .5rem; border-radius:6px; cursor:pointer; margin-left:1.4rem;
+  }
+  .folder-tree .leaf:hover, .folder-tree summary:hover { background:#333; }
+  .folder-tree .selected { background:#0d47a1; color:#fff; }
+  .actions-row { display:flex; gap:.5rem; justify-content:flex-start; margin-top:.75rem; }
+  
+/* === Dark Zephyr folder tree layout override (non-breaking) === */
+:root {
+  --bg: #2b2d30;
+  --panel: #1f2124;
+  --text: #d7dae0;
+  --muted: #9aa0a6;
+  --hover: #33373a;
+  --select-bg: #094771;
+  --select-fg: #ffffff;
+  --guide: #3a3e42;
+  --border: #2f3336;
+}
+
+.folder-tree {
+  margin-top: .25rem;
+  font-size: 13px;
+  line-height: 1.6;
+  user-select: none;
+  color: var(--text);
+}
+.folder-tree details {
+  position: relative;
+  margin-left: .25rem;
+  padding-left: .75rem;
+}
+.folder-tree details::before {
+  content: "";
+  position: absolute;
+  left: .25rem;
+  top: 0; bottom: 0;
+  width: 1px;
+  background: var(--guide);
+  opacity: .6;
+}
+.folder-tree summary {
+  cursor: pointer;
+  list-style: none;
+  outline: none;
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .25rem .45rem;
+  border-radius: 6px;
+  position: relative;
+}
+.folder-tree summary::-webkit-details-marker { display: none; }
+.folder-tree summary::before {
+  content: "";
+  width: 0; height: 0;
+  border-left: 5px solid var(--muted);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transform: rotate(-90deg);
+  transition: transform .15s ease, border-left-color .15s ease;
+  margin-right: .1rem;
+}
+.folder-tree details[open] > summary::before {
+  transform: rotate(0deg);
+  border-left-color: var(--text);
+}
+.folder-tree .leaf {
+  padding: .25rem .45rem;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-left: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+}
+.folder-tree details + .leaf,
+.folder-tree details + details { margin-top: .15rem; }
+.folder-tree details[open] > *:not(summary) { position: relative; }
+.folder-tree details[open] > *:not(summary)::before {
+  content: "";
+  position: absolute;
+  left: -0.5rem;
+  top: 0.8em;
+  width: .75rem;
+  height: 1px;
+  background: var(--guide);
+  opacity: .5;
+}
+.folder-tree .leaf:hover,
+.folder-tree summary:hover { background: var(--hover); }
+.folder-tree .selected {
+  background: var(--select-bg);
+  color: var(--select-fg);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
+}
+
+/* Keep actions-row layout; add subtle divider if not already styled */
+.actions-row {
+  display: flex;
+  gap: .5rem;
+  justify-content: flex-start;
+  margin-top: .75rem;
+  padding-top: .5rem;
+  border-top: 1px solid var(--border);
+}
+
+/* Optional: basic button style if none exists */
+.actions-row .btn {
+  background: #2d333b;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: .35rem .7rem;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, transform .02s;
+}
+.actions-row .btn:hover { background: #3a4048; border-color: #3c4247; }
+.actions-row .btn:active { transform: translateY(1px); }
+
+
+/* === Zephyr Filters Panel === */
+.filters-panel {
+  background-color: #2d2d2d;
+  border: 1px solid #444;
+  border-radius: 10px;
+  padding: .75rem;
+  margin: .75rem 0;
+  color: #fff;
+}
+.filters-panel .filters-title {
+  font-weight: 600;
+  margin-bottom: .5rem;
+  color: #4fc3f7;
+}
+.filters-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: .65rem .75rem;
+}
+@media (min-width: 980px) {
+  .filters-grid { grid-template-columns: repeat(3, minmax(220px, 1fr)); }
+}
+.filters-grid .field label {
+  display: block;
+  font-size: 12px;
+  color: #bbb;
+  margin-bottom: .25rem;
+}
+.filters-grid .field select,
+.filters-grid .field input {
+  width: 95%;
+  border: 1px solid #444;
+  background: #1f1f1f;
+  color: #fff;
+  border-radius: 8px;
+  padding: .45rem .6rem;
+  font-size: 13px;
+  outline: none;
+}
+.filters-grid .field select:focus,
+.filters-grid .field input:focus {
+  border-color: #666;
+  box-shadow: 0 0 0 2px rgba(79,195,247,.25);
+}
+.filters-row-actions {
+  margin-top: .5rem;
+  display: flex;
+  gap: .5rem;
+  justify-content: flex-end;
+}
+.filters-row-actions .btn {
+  background: #2d333b;
+  color: #fff;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: .35rem .7rem;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease, transform .02s;
+}
+.filters-row-actions .btn:hover { background: #3a4048; border-color: #555; }
+.filters-row-actions .btn:active { transform: translateY(1px); }

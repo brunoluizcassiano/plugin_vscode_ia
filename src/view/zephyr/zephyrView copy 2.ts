@@ -1,8 +1,12 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.getZephyrViewContent = void 0;
-function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
-    return `
+type ViewArgs = {
+  webview: import('vscode').Webview;
+  nonce: string;
+  styleUri: string;
+  scriptUri?: string; // se mover JS para arquivo externo
+};
+
+export function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }: ViewArgs): string {
+  return `
   <!DOCTYPE html>
   <html lang="pt-br">
   <head>
@@ -1705,4 +1709,3 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
   </html>
   `;
 }
-exports.getZephyrViewContent = getZephyrViewContent;

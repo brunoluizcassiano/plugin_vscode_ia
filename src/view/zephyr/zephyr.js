@@ -1,610 +1,140 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.getZephyrViewContent = void 0;
-function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
-    return `
-  <!DOCTYPE html>
-  <html lang="pt-br">
-  <head>
-  <meta charset="UTF-8" />
-  <style>
-  /* ... (todo o SEU CSS original permanece idêntico) ... */
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-    background-color: #1e1e1e;
-    color: #ffffff;
-    padding: 2rem;
-  }
-  .container {
-    background-color: #2d2d2d;
-    padding: 2rem;
-    border-radius: 10px;
-    max-width: 800px;
-    margin: 0 auto;
-    display: none;
-  }
-  #loading { text-align: center; font-size: 1.2rem; margin-top: 100px; }
-  #loading img { width: 100px; margin-bottom: 1rem; }
-  h2 { margin-top: 0; color: #4fc3f7; }
-  textarea {
-    width: 95%;
-    background-color: #1e1e1e;
-    color: #ccc;
-    padding: 1rem;
-    border-radius: 6px;
-    border: 1px solid #444;
-    resize: vertical;
-    min-height: 100px;
-    margin-top: 1rem;
-    white-space: pre-wrap;
-    font-family: monospace;
-  }
-  .checkbox-container { display: flex; align-items: center; margin-top: 0.5rem; }
-  .checkbox-container input { margin-right: 0.5rem; }
+const vscode = acquireVsCodeApi();
 
-  /* Toolbar alinhada à esquerda */
-  .toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    align-items: center;
-    justify-content: flex-start;
-    margin-top: 1rem;
-  }
-  .toolbar button {
-    background-color: #007acc;
-    color: white;
-    padding: 0.6rem 1rem;
-    border: none;
-    border-radius: 0.5rem;
-    cursor: pointer;
-    min-width: 200px;
-    text-align: center;
-    white-space: nowrap;
-    transition: background-color 0.25s;
-  }
-  .toolbar button:hover { background-color: #005f9e; }
-  button {
-    background-color: #007acc;
-    color: white;
-    padding: 0.6rem 1rem;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    margin-top: 0.5rem;
-    margin-right: 0.5rem;
-    transition: background-color 0.2s;
-  }
-  button:hover { background-color: #005f9e; }
-  .btn--full { width:100%; justify-content:center; }
-  .issue-header p { margin: 0.3rem 0; color: #ccc; }
+let nomeRecebido = false;
+let testesRecebido = false;
+let issueId = "";
+let issueKey = "";
+let sugestoesIA = [];
+let testesZephyrRaw = [];
+let pastasPrincipaisCache = [];
+let caminhoPasta = null;
 
-  #iaLoading {
-    display: none;
-    margin-top: 2rem;
-    padding: 1rem;
-    background-color: #111;
-    border-left: 4px solid #fbc02d;
-    border-radius: 6px;
-    color: #fff176;
-    font-style: italic;
-  }
-
-  select {
-    width: 300px;
-    padding: 0.6rem;
-    border-radius: 6px;
-    border: none;
-    margin-bottom: 1rem;
-    background-color: #3c3c3c;
-    color: #ffffff;
-  }
-
-  /* ========= Form (mesmo padrão do backend) ========= */
-  .form {
-    display:none;
-    margin-top: 1rem;
-    background: #242424;
-    border: 1px solid #3b3b3b;
-    border-radius: 10px;
-    padding: 1rem;
-  }
-  .form__row {
-    display: grid;
-    grid-template-columns: 180px 1fr;
-    gap: 12px;
-    align-items: center;
-    margin-bottom: .85rem;
-  }
-  .form label { color:#ddd; }
-  .form input[type="text"] {
-    background-color: #3c3c3c;
-    color:#fff;
-    border:0;
-    border-radius:8px;
-    padding:.6rem .75rem;
-    width:95%;
-  }
-  .form textarea {
-    background-color: #3c3c3c;
-    color:#fff;
-    border:0;
-    border-radius:8px;
-    padding:.6rem .75rem;
-    width:95%;
-  }
-  .form .note { color:#aaa; font-size:.85rem; margin-left:180px; margin-top:-6px; margin-bottom:.75rem; }
-  .info { color:#9ad; margin-left:.5rem; }
-
-  /* ===== estilos mínimos do fluxo por Projeto ===== */
-  .row { display:flex; gap:.5rem; align-items:flex-end; flex-wrap:wrap; }
-  .col { flex:1; min-width: 240px; }
-  .muted { color:#ccc; font-size:.9rem; }
-
-  /* ====== Árvore de pastas (sem checkboxes) ====== */
-  .folder-tree { margin-top:.5rem; }
-  .folder-tree details { border-left:1px solid #444; margin-left:.5rem; padding-left:.5rem; }
-  .folder-tree summary {
-    cursor:pointer; padding:.3rem .5rem; border-radius:6px; outline:none; list-style:none;
-  }
-  .folder-tree summary::-webkit-details-marker { display:none; }
-  .folder-tree .leaf {
-    padding:.3rem .5rem; border-radius:6px; cursor:pointer; margin-left:1.4rem;
-  }
-  .folder-tree .leaf:hover, .folder-tree summary:hover { background:#333; }
-  .folder-tree .selected { background:#0d47a1; color:#fff; }
-  .actions-row { display:flex; gap:.5rem; justify-content:flex-start; margin-top:.75rem; }
-  
-/* === Dark Zephyr folder tree layout override (non-breaking) === */
-:root {
-  --bg: #2b2d30;
-  --panel: #1f2124;
-  --text: #d7dae0;
-  --muted: #9aa0a6;
-  --hover: #33373a;
-  --select-bg: #094771;
-  --select-fg: #ffffff;
-  --guide: #3a3e42;
-  --border: #2f3336;
-}
-
-.folder-tree {
-  margin-top: .25rem;
-  font-size: 13px;
-  line-height: 1.6;
-  user-select: none;
-  color: var(--text);
-}
-.folder-tree details {
-  position: relative;
-  margin-left: .25rem;
-  padding-left: .75rem;
-}
-.folder-tree details::before {
-  content: "";
-  position: absolute;
-  left: .25rem;
-  top: 0; bottom: 0;
-  width: 1px;
-  background: var(--guide);
-  opacity: .6;
-}
-.folder-tree summary {
-  cursor: pointer;
-  list-style: none;
-  outline: none;
-  display: flex;
-  align-items: center;
-  gap: .4rem;
-  padding: .25rem .45rem;
-  border-radius: 6px;
-  position: relative;
-}
-.folder-tree summary::-webkit-details-marker { display: none; }
-.folder-tree summary::before {
-  content: "";
-  width: 0; height: 0;
-  border-left: 5px solid var(--muted);
-  border-top: 4px solid transparent;
-  border-bottom: 4px solid transparent;
-  transform: rotate(-90deg);
-  transition: transform .15s ease, border-left-color .15s ease;
-  margin-right: .1rem;
-}
-.folder-tree details[open] > summary::before {
-  transform: rotate(0deg);
-  border-left-color: var(--text);
-}
-.folder-tree .leaf {
-  padding: .25rem .45rem;
-  border-radius: 6px;
-  cursor: pointer;
-  margin-left: 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: .45rem;
-}
-.folder-tree details + .leaf,
-.folder-tree details + details { margin-top: .15rem; }
-.folder-tree details[open] > *:not(summary) { position: relative; }
-.folder-tree details[open] > *:not(summary)::before {
-  content: "";
-  position: absolute;
-  left: -0.5rem;
-  top: 0.8em;
-  width: .75rem;
-  height: 1px;
-  background: var(--guide);
-  opacity: .5;
-}
-.folder-tree .leaf:hover,
-.folder-tree summary:hover { background: var(--hover); }
-.folder-tree .selected {
-  background: var(--select-bg);
-  color: var(--select-fg);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.05);
-}
-
-/* Keep actions-row layout; add subtle divider if not already styled */
-.actions-row {
-  display: flex;
-  gap: .5rem;
-  justify-content: flex-start;
-  margin-top: .75rem;
-  padding-top: .5rem;
-  border-top: 1px solid var(--border);
-}
-
-/* Optional: basic button style if none exists */
-.actions-row .btn {
-  background: #2d333b;
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: .35rem .7rem;
-  font-size: 12.5px;
-  cursor: pointer;
-  transition: background .15s ease, border-color .15s ease, transform .02s;
-}
-.actions-row .btn:hover { background: #3a4048; border-color: #3c4247; }
-.actions-row .btn:active { transform: translateY(1px); }
-
-
-/* === Zephyr Filters Panel === */
-.filters-panel {
-  background-color: #2d2d2d;
-  border: 1px solid #444;
-  border-radius: 10px;
-  padding: .75rem;
-  margin: .75rem 0;
-  color: #fff;
-}
-.filters-panel .filters-title {
-  font-weight: 600;
-  margin-bottom: .5rem;
-  color: #4fc3f7;
-}
-.filters-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(220px, 1fr));
-  gap: .65rem .75rem;
-}
-@media (min-width: 980px) {
-  .filters-grid { grid-template-columns: repeat(3, minmax(220px, 1fr)); }
-}
-.filters-grid .field label {
-  display: block;
-  font-size: 12px;
-  color: #bbb;
-  margin-bottom: .25rem;
-}
-.filters-grid .field select,
-.filters-grid .field input {
-  width: 95%;
-  border: 1px solid #444;
-  background: #1f1f1f;
-  color: #fff;
-  border-radius: 8px;
-  padding: .45rem .6rem;
-  font-size: 13px;
-  outline: none;
-}
-.filters-grid .field select:focus,
-.filters-grid .field input:focus {
-  border-color: #666;
-  box-shadow: 0 0 0 2px rgba(79,195,247,.25);
-}
-.filters-row-actions {
-  margin-top: .5rem;
-  display: flex;
-  gap: .5rem;
-  justify-content: flex-end;
-}
-.filters-row-actions .btn {
-  background: #2d333b;
-  color: #fff;
-  border: 1px solid #444;
-  border-radius: 8px;
-  padding: .35rem .7rem;
-  font-size: 12.5px;
-  cursor: pointer;
-  transition: background .15s ease, border-color .15s ease, transform .02s;
-}
-.filters-row-actions .btn:hover { background: #3a4048; border-color: #555; }
-.filters-row-actions .btn:active { transform: translateY(1px); }
-
-</style>
-  </head>
-  <body>
-  <div id="loading">
-    <img src="https://cssbud.com/wp-content/uploads/2021/08/beepboop.gif" alt="Carregando..." />
-    <p>🔄 Carregando dados do Zephyr...</p>
-  </div>
-  
-  <div class="container">
-    <h2 id="ola"></h2>
-  
-    <div id="issueHeader" class="issue-header"></div>
-    <div id="issueTests" class="issue-tests"></div>
-
-    <!-- =================== Fluxo por PROJETO (simplificado) =================== -->
-    <div id="projectFlow" style="display:none; margin-bottom:1rem;">
-      <h2>Explorar testes por Projeto</h2>
-      <div class="row">
-        <div class="col">
-          <label class="muted">Projeto (Jira)</label><br />
-          <select id="projectSelect"><option value="">Selecione...</option></select>
-        </div>
-      </div>
-
-      <div id="projectStructure" style="display:none; margin-top:1rem;">
-        <div>
-          <div class="muted">Estrutura de pastas (Zephyr)</div>
-          
-          <!-- Filtros (Zephyr) -->
-          <div id="filtersPanel" class="filters-panel">
-            <div class="filters-title">Filtros</div>
-            <div class="filters-grid">
-              <div class="field">
-                <label for="fltAutomationStatus">Automation status</label>
-                <select id="fltAutomationStatus">
-                  <option value="N/A">N/A</option>
-                  <option value="Automated">Automated</option>
-                  <option value="Not automated">Not Automated</option>
-                  <option value="Not applicable">Not Applicable</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="fltStatus">Status</label>
-                <select id="fltStatus">
-                  <option value="N/A">N/A</option>
-                  <option value="Approved">Approved</option>
-                  <option value="Deprecated">Deprecated</option>
-                  <option value="Draft">Draft</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="fltTestType">Test Type</label>
-                <select id="fltTestType">
-                  <option value="N/A">N/A</option>
-                  <option value="Acceptance">Acceptance</option>
-                  <option value="End To End">End To End</option>
-                  <option value="Regression">Regression</option>
-                  <option value="Sanity">Sanity</option>
-                  <option value="Security">Security</option>
-                  <option value="Performance">Performance</option>
-                  <option value="UI">UI</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="fltTestClass">Test Class</label>
-                <select id="fltTestClass">
-                  <option value="N/A">N/A</option>
-                  <option value="Positive">Positive</option>
-                  <option value="Negative">Negative</option>
-                </select>
-              </div>
-              <div class="field">
-                <label for="fltTestGroup">Test Group</label>
-                <select id="fltTestGroup">
-                  <option value="N/A">N/A</option>
-                  <option value="Backend">Backend</option>
-                  <option value="Desktop">Desktop</option>
-                  <option value="Front-End">Front-End</option>
-                </select>
-              </div>
-            </div>
-            <div class="filters-row-actions">
-              <button id="btnClearFilters" type="button" class="btn">Limpar filtros</button>
-            </div>
-          </div>
-
-          <div id="folderTree" class="folder-tree"></div>
-        </div>
-
-        <div class="actions-row">
-          <button id="btnApplyStructure" type="button" disabled>Aplicar Seleção</button>
-        </div>
-
-        <div id="projLoading" style="display:none; margin-top:.5rem; color:#ccc;">Carregando...</div>
-        <div id="projEmpty" style="display:none; margin-top:.5rem; color:#ccc;">Nada a exibir.</div>
-      </div>
-    </div>
-    <!-- =================== /Fluxo por PROJETO =================== -->
-  
-    <!-- toolbar 1: ações principais -->
-    <div class="toolbar" role="toolbar">
-      <button id="btnAnalisar" onclick="analisarIA()">
-        <span class="icon">🧠</span> Analisar com IA QA
-      </button>
-      <button id="btnAdicionar" style="display: none;" onclick="adicionarCenario()">
-        <span class="icon">➕</span> Adicionar cenário
-      </button>
-      <button id="btnSelecionarTodos" style="display: none;" onclick="selecionarTodos()">
-        <span class="icon">✅</span> Selecionar todos
-      </button>
-      <button id="btnEnviarIA" style="display: none;" onclick="enviarCriacaoCenariosIA()">
-        <span class="icon">📤</span> Criar cenarios no Zephyr
-      </button>
-      <button id="btnEnviarAtualizacaoIA" style="display: none;" onclick="enviarAtualizacao()">
-        <span class="icon">📤</span> Sincronizar com Zephyr
-      </button>
-      <button id="btnCriarScripts" style="display: none;" onclick="enviarCriarScripts()">
-        <span class="icon">🤖</span> Criar Scripts
-      </button>
-    </div>
-  
-    <!-- Formulário (padrão backend) -->
-    <form id="formulario" class="form" onsubmit="handleSubmit(event)">
-      <div class="form__row">
-        <label>Nome da Feature:</label>
-        <input type="text" id="featureName" placeholder="Ex.: Onboarding Gluon" />
-      </div>
-      <div class="form__row">
-        <label>Rule (opcional):</label>
-        <textarea id="ruleName" placeholder="Ex.: Regra opcional aqui" rows="3"></textarea>
-      </div>
-      <div class="form__row">
-        <label>Nome do arquivo:</label>
-        <input type="text" id="fileBaseName" placeholder="Ex.: TRBC-25284 ou onboarding (sem .feature)" />
-      </div>
-      <div class="form__row">
-        <label>Tribo:</label>
-        <input type="text" id="tribeName" placeholder="Ex.: contratos" />
-      </div>
-      <div class="form__row">
-        <label>Tags extras:</label>
-        <input type="text" id="extraTags" placeholder="Ex.: @regressivo @rest @autorFulano" />
-      </div>
-      <div class="form__row">
-        <label>📁 Pasta de destino:</label>
-        <div>
-          <button type="button" onclick="selecionarPasta()"><span>Selecionar pasta</span></button>
-          <span id="pastaSelecionada" class="info"></span>
-        </div>
-      </div>
-      <div class="note">As opções acima serão usadas como metadados do arquivo .feature (cabeçalho e tags) e para o nome do arquivo.</div>
-      <button class="btn--full" type="submit">🚀 Gerar arquivo .feature</button>
-      <div id="formError" class="error">Preencha ao menos o nome do arquivo ou selecione uma pasta.</div>
-    </form>
-  
-    <div id="iaLoading">🔍 A IA está analisando os cenários...</div>
-  </div>
-  
-  <script>
-  const vscode = acquireVsCodeApi();
-  
-  let nomeRecebido = false;
-  let testesRecebido = false;
-  let issueId = "";
-  let issueKey = "";
-  let sugestoesIA = [];
-  let testesZephyrRaw = [];
-  let pastasPrincipaisCache = [];
-  let caminhoPasta = null;
-
-  /* ===== Fluxo por projeto (refs) ===== */
-  const projectFlow = {
+/* ===== Fluxo por projeto (refs) ===== */
+const projectFlow = {
     root: document.getElementById('projectFlow'),
     select: document.getElementById('projectSelect'),
     structure: document.getElementById('projectStructure'),
     folderTree: document.getElementById('folderTree'),
     btnApply: document.getElementById('btnApplyStructure'),
-    loading: document.getElementById('projLoading'),
-    empty: document.getElementById('projEmpty'),
-  };
+    loading: document.getElementById('projLoading')
+};
 
-  // IDs reais dos filtros
-  const FILTER_IDS = {
+// IDs reais dos filtros
+const FILTER_IDS = {
     automationStatus: 'fltAutomationStatus',
-    status:           'fltStatus',
-    testType:         'fltTestType',
-    testClass:        'fltTestClass',
-    testGroup:        'fltTestGroup',
-    clearBtn:         'btnClearFilters',
-  };
+    status: 'fltStatus',
+    testType: 'fltTestType',
+    testClass: 'fltTestClass',
+    testGroup: 'fltTestGroup',
+    clearBtn: 'btnClearFilters',
+};
 
-  // Nós DOM (JS puro – sem type assertions)
-  const $filters = {
+// Nós DOM (JS puro – sem type assertions)
+const $filters = {
     automationStatus: document.getElementById(FILTER_IDS.automationStatus),
-    status:           document.getElementById(FILTER_IDS.status),
-    testType:         document.getElementById(FILTER_IDS.testType),
-    testClass:        document.getElementById(FILTER_IDS.testClass),
-    testGroup:        document.getElementById(FILTER_IDS.testGroup),
-    clearBtn:         document.getElementById(FILTER_IDS.clearBtn),
-  };
+    status: document.getElementById(FILTER_IDS.status),
+    testType: document.getElementById(FILTER_IDS.testType),
+    testClass: document.getElementById(FILTER_IDS.testClass),
+    testGroup: document.getElementById(FILTER_IDS.testGroup),
+    clearBtn: document.getElementById(FILTER_IDS.clearBtn),
+};
 
-  // Helpers
-  const NA = 'N/A';
-  function normalize(v){ return v === NA ? '' : (v || ''); }
-  function getFiltersFromUI() {
+// Helpers
+const NA = 'N/A';
+
+function normalize(v) { return v === NA ? '' : (v || ''); }
+
+function getFiltersFromUI() {
     return {
-      automationStatus: normalize($filters.automationStatus && $filters.automationStatus.value),
-      status:           normalize($filters.status && $filters.status.value),
-      testType:         normalize($filters.testType && $filters.testType.value),
-      testClass:        normalize($filters.testClass && $filters.testClass.value),
-      testGroup:        normalize($filters.testGroup && $filters.testGroup.value),
+        automationStatus: normalize($filters.automationStatus && $filters.automationStatus.value),
+        status: normalize($filters.status && $filters.status.value),
+        testType: normalize($filters.testType && $filters.testType.value),
+        testClass: normalize($filters.testClass && $filters.testClass.value),
+        testGroup: normalize($filters.testGroup && $filters.testGroup.value),
     };
-  }
-  function applyFiltersToUI(filters) {
+}
+
+function applyFiltersToUI(filters) {
     if (!filters) return;
     if ($filters.automationStatus) $filters.automationStatus.value = filters.automationStatus || NA;
-    if ($filters.status)           $filters.status.value           = filters.status || NA;
-    if ($filters.testType)         $filters.testType.value         = filters.testType || NA;
-    if ($filters.testClass)        $filters.testClass.value        = filters.testClass || NA;
-    if ($filters.testGroup)        $filters.testGroup.value        = filters.testGroup || NA;
-  }
-  function saveFiltersToState() {
+    if ($filters.status) $filters.status.value = filters.status || NA;
+    if ($filters.testType) $filters.testType.value = filters.testType || NA;
+    if ($filters.testClass) $filters.testClass.value = filters.testClass || NA;
+    if ($filters.testGroup) $filters.testGroup.value = filters.testGroup || NA;
+}
+
+function saveFiltersToState() {
     const s = vscode.getState() || {};
     vscode.setState({ ...s, filtros: getFiltersFromUI() });
-  }
-  function getFiltersFromState() {
+}
+
+function getFiltersFromState() {
     const s = vscode.getState() || {};
     return s.filtros || {};
-  }
+}
 
-  // Encapsula binding (chame no Boot, depois de montar a UI)
-  function bindFilterListeners() {
+// Encapsula binding (chame no Boot, depois de montar a UI)
+function bindFilterListeners() {
     [$filters.automationStatus, $filters.status, $filters.testType, $filters.testClass, $filters.testGroup]
-      .forEach((el) => {
-        if (!el) return;
-        el.addEventListener('change', () => {
-          saveFiltersToState();
-          if (_projetoSelecionado && _selectedFolderId) {
-            vscode.postMessage({
-              type: 'carregarTestesDaPasta',
-              projectKey: _projetoSelecionado,
-              folderId: _selectedFolderId,
-              filtros: getFiltersFromState(),
+        .forEach((el) => {
+            if (!el) return;
+            el.addEventListener('change', () => {
+                saveFiltersToState();
+                if (_projetoSelecionado && _selectedFolderId) {
+                    vscode.postMessage({
+                        type: 'carregarTestesDaPasta',
+                        projectKey: _projetoSelecionado,
+                        folderId: _selectedFolderId,
+                        filtros: getFiltersFromState(),
+                    });
+                }
             });
-          }
         });
-      });
 
     if ($filters.clearBtn) {
-      $filters.clearBtn.addEventListener('click', () => {
-        applyFiltersToUI({});
-        saveFiltersToState();
-        if (_projetoSelecionado && _selectedFolderId) {
-          vscode.postMessage({
-            type: 'carregarTestesDaPasta',
-            projectKey: _projetoSelecionado,
-            folderId: _selectedFolderId,
-            filtros: getFiltersFromState(),
-          });
-        }
-      });
+        $filters.clearBtn.addEventListener('click', () => {
+            applyFiltersToUI({});
+            saveFiltersToState();
+            if (_projetoSelecionado && _selectedFolderId) {
+                vscode.postMessage({
+                    type: 'carregarTestesDaPasta',
+                    projectKey: _projetoSelecionado,
+                    folderId: _selectedFolderId,
+                    filtros: getFiltersFromState(),
+                });
+            }
+        });
     }
+}
+
+function bindButtons() {
+  const byId = (id) => document.getElementById(id);
+
+  byId('btnAnalisar')?.addEventListener('click', analisarIA);
+  byId('btnAdicionar')?.addEventListener('click', adicionarCenario);
+  byId('btnSelecionarTodos')?.addEventListener('click', selecionarTodos);
+  byId('btnEnviarIA')?.addEventListener('click', enviarCriacaoCenariosIA);
+  byId('btnEnviarAtualizacaoIA')?.addEventListener('click', enviarAtualizacao);
+  byId('btnCriarScripts')?.addEventListener('click', enviarCriarScripts);
+  byId('selecionarPasta')?.addEventListener('click', selecionarPasta);
+  
+}
+
+function bindFeatureForm() {
+  const form = document.getElementById('formulario');
+  if (form) {
+    form.addEventListener('submit', handleSubmit); // <-- sem inline, compatível com CSP
   }
+}
 
-  let _todosProjetos = [];
-  let _projetoSelecionado = '';
-  let _selectedFolderId = null;
+let _todosProjetos = [];
+let _projetoSelecionado = '';
+let _selectedFolderId = null;
 
-  function show(el){ if(el) el.style.display = 'block'; }
-  function hide(el){ if(el) el.style.display = 'none'; }
+function show(el) { if (el) el.style.display = 'block'; }
+function hide(el) { if (el) el.style.display = 'none'; }
 
-  function showProjectFlow(){
+function showProjectFlow() {
     document.getElementById('issueHeader').style.display = 'none';
     document.getElementById('issueTests').style.display = 'none';
     const tb = document.querySelector('.toolbar');
@@ -615,35 +145,36 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
     show(projectFlow.root);
     hide(projectFlow.structure);
     projectFlow.btnApply.disabled = true;
-  }
-  function showIssueFlow(){
+}
+
+function showIssueFlow() {
     document.getElementById('issueHeader').style.display = 'block';
     document.getElementById('issueTests').style.display = 'block';
     const tb = document.querySelector('.toolbar');
     if (tb) tb.style.display = 'flex';
     hide(projectFlow.root);
-  }
-  function setProjLoading(on, text){
-    if (on) {
-      projectFlow.loading.textContent = text || 'Carregando...';
-      show(projectFlow.loading);
-    } else {
-      hide(projectFlow.loading);
-    }
-  }
+}
 
-  function mountProjetos(list){
+function setProjLoading(on, text) {
+    if (on) {
+        projectFlow.loading.textContent = text || 'Carregando...';
+        show(projectFlow.loading);
+    } else {
+        hide(projectFlow.loading);
+    }
+}
+
+function mountProjetos(list) {
     _todosProjetos = Array.isArray(list) ? list : [];
     projectFlow.select.innerHTML = '<option value="">Selecione...</option>' +
-      _todosProjetos.map(p => '<option value="'+(p.id || p.key)+'">'+ (p.name || p.key || '') + (p.key ? ' ('+p.key+')' : '') +'</option>').join('');
-  
-  setAppState({ projetosCache: _todosProjetos });
+        _todosProjetos.map(p => '<option value="' + (p.id || p.key) + '">' + (p.name || p.key || '') + (p.key ? ' (' + p.key + ')' : '') + '</option>').join('');
+
+    setAppState({ projetosCache: _todosProjetos });
 }
 
 
-  /* ========= Árvore de pastas (sem checkbox) ========= */
-
-  function ensureTree(list){
+/* ========= Árvore de pastas (sem checkbox) ========= */
+function ensureTree(list) {
     // aceita lista já aninhada (com children) ou plana (id, parentId, name)
     if (!Array.isArray(list)) return [];
     if (list.length && list[0] && Array.isArray(list[0].children)) return list;
@@ -652,49 +183,49 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
     list.forEach(n => { map[n.id] = { id: n.id, name: n.name, parentId: n.parentId ?? null, children: [] }; });
     const roots = [];
     list.forEach(n => {
-      const node = map[n.id];
-      const parentId = n.parentId ?? null;
-      if (parentId == null || !map[parentId]) roots.push(node);
-      else map[parentId].children.push(node);
+        const node = map[n.id];
+        const parentId = n.parentId ?? null;
+        if (parentId == null || !map[parentId]) roots.push(node);
+        else map[parentId].children.push(node);
     });
     return roots;
-  }
+}
 
-  function buildTreeHTML(nodes){
+function buildTreeHTML(nodes) {
     if (!nodes || !nodes.length) return '<div style="color:#ccc;">Nenhuma pasta encontrada.</div>';
     let html = '';
     const walk = (n) => {
-      const hasChildren = n.children && n.children.length;
-      if (hasChildren) {
-        html += '<details>';
-        html += '<summary data-id="'+n.id+'">'+escapeHTML(n.name || '(sem nome)')+'</summary>';
-        n.children.forEach(child => walk(child));
-        html += '</details>';
-      } else {
-        html += '<div class="leaf" data-id="'+n.id+'">'+escapeHTML(n.name || '(sem nome)')+'</div>';
-      }
+        const hasChildren = n.children && n.children.length;
+        if (hasChildren) {
+            html += '<details>';
+            html += '<summary data-id="' + n.id + '">' + escapeHTML(n.name || '(sem nome)') + '</summary>';
+            n.children.forEach(child => walk(child));
+            html += '</details>';
+        } else {
+            html += '<div class="leaf" data-id="' + n.id + '">' + escapeHTML(n.name || '(sem nome)') + '</div>';
+        }
     };
     nodes.forEach(walk);
     return html;
-  }
+}
 
-  function escapeHTML(s){
+function escapeHTML(s) {
     return String(s)
-      .replace(/&/g,'&amp;')
-      .replace(/</g,'&lt;')
-      .replace(/>/g,'&gt;')
-      .replace(/"/g,'&quot;')
-      .replace(/'/g,'&#39;');
-  }
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 
-  function renderFolderTree(list){
+function renderFolderTree(list) {
     const tree = ensureTree(list || []);
     projectFlow.folderTree.innerHTML = buildTreeHTML(tree);
     _selectedFolderId = null;
     projectFlow.btnApply.disabled = true;
-  }
+}
 
-  function selectFolderById(id){
+function selectFolderById(id) {
     // persist selected folder id
     setAppState({ selectedFolderId: id });
     _selectedFolderId = id;
@@ -703,32 +234,33 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
     // limpa seleção anterior
     projectFlow.folderTree.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
     // marca selecionado (summary ou leaf)
-    const target = projectFlow.folderTree.querySelector('[data-id="'+id+'"]');
+    const target = projectFlow.folderTree.querySelector('[data-id="' + id + '"]');
     if (target) target.classList.add('selected');
-  }
+}
 
-  function getSelectedFolderIds(){
+function getSelectedFolderIds() {
     return _selectedFolderId ? [_selectedFolderId] : [];
-  }
+}
 
-  /* ===================== State helpers ====================== */
-  function getAppState() { return vscode.getState() || {}; }
-  function setAppState(patch) { const cur = getAppState(); vscode.setState({ ...cur, ...patch }); }
-  
-  /* -------- Form state -------- */
-  function saveFormState(patch = {}) {
+/* ===================== State helpers ====================== */
+function getAppState() { return vscode.getState() || {}; }
+function setAppState(patch) { const cur = getAppState(); vscode.setState({ ...cur, ...patch }); }
+
+/* -------- Form state -------- */
+function saveFormState(patch = {}) {
     const form = {
-      featureName: document.getElementById('featureName')?.value ?? '',
-      ruleName: document.getElementById('ruleName')?.value ?? '',
-      fileBaseName: document.getElementById('fileBaseName')?.value ?? '',
-      tribeName: document.getElementById('tribeName')?.value ?? '',
-      extraTags: document.getElementById('extraTags')?.value ?? '',
-      caminhoPasta: caminhoPasta || null,
-      formVisible: document.getElementById('formulario')?.style.display !== 'none'
+        featureName: document.getElementById('featureName')?.value ?? '',
+        ruleName: document.getElementById('ruleName')?.value ?? '',
+        fileBaseName: document.getElementById('fileBaseName')?.value ?? '',
+        tribeName: document.getElementById('tribeName')?.value ?? '',
+        extraTags: document.getElementById('extraTags')?.value ?? '',
+        caminhoPasta: caminhoPasta || null,
+        formVisible: document.getElementById('formulario')?.style.display !== 'none'
     };
     setAppState({ form: { ...form, ...patch } });
-  }
-  function loadFormState() {
+}
+
+function loadFormState() {
     const { form } = getAppState();
     if (!form) return;
     const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
@@ -738,27 +270,28 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
     setVal('tribeName', form.tribeName);
     setVal('extraTags', form.extraTags);
     if (typeof form.caminhoPasta === 'string') {
-      caminhoPasta = form.caminhoPasta;
-      const span = document.getElementById('pastaSelecionada');
-      if (span) span.innerText = caminhoPasta;
+        caminhoPasta = form.caminhoPasta;
+        const span = document.getElementById('pastaSelecionada');
+        if (span) span.innerText = caminhoPasta;
     }
     const formEl = document.getElementById('formulario');
     if (formEl) formEl.style.display = form.formVisible ? 'block' : 'none';
-  }
-  
-  /* -------- Zephyr Keys state (persistido) -------- */
-  function getZephyrKeysState() { return getAppState().zephyrKeys || {}; }
-  function setZephyrKeysState(map) { setAppState({ zephyrKeys: map }); }
-  function upsertZephyrKey(idx, zephyrKey) {
+}
+
+/* -------- Zephyr Keys state (persistido) -------- */
+function getZephyrKeysState() { return getAppState().zephyrKeys || {}; }
+function setZephyrKeysState(map) { setAppState({ zephyrKeys: map }); }
+function upsertZephyrKey(idx, zephyrKey) {
     const map = { ...getZephyrKeysState(), [idx]: zephyrKey };
     setZephyrKeysState(map);
     applyZephyrKeys();
-  }
-  function applyZephyrKeys() {
+}
+
+function applyZephyrKeys() {
     const map = getZephyrKeysState();
     Object.keys(map).forEach(i => {
-      const el = document.getElementById(\`cenarioLabel-\${i}\`);
-      if (el) el.innerHTML = \`📝 Cenário (IA): \${map[i]}\`;
+        const el = document.getElementById(`cenarioLabel-${i}`);
+      if (el) el.innerHTML = `📝 Cenário (IA): ${map[i]}`;
     });
   }
   
@@ -777,9 +310,9 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
   function applyFolderSelectionsToDOM(idx) {
     const selMap = getFolderSelections();
     const sel = selMap[idx] || {};
-    const s1 = document.getElementById(\`folder1-\${idx}\`);
-    const s2 = document.getElementById(\`folder2-\${idx}\`);
-    const s3 = document.getElementById(\`folder3-\${idx}\`);
+    const s1 = document.getElementById(`folder1-${idx}`);
+    const s2 = document.getElementById(`folder2-${idx}`);
+    const s3 = document.getElementById(`folder3-${idx}`);
   
     if (s1 && s1.options.length <= 1) {
       s1.innerHTML = '<option value="">Selecione...</option>';
@@ -838,27 +371,43 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
   /* ===================== Util Gherkin ====================== */
   function extrairGherkin(texto) {
     if (!texto || typeof texto !== "string") return "";
-    const regex = /\\\`\\\`\\\`gherkin\\s*([\\s\\S]*?)\\\`\\\`\\\`/i;
+    const regex = /\\`\\`\\`gherkin\\s*([\\s\\S]*?)\\`\\`\\`/i;
     const match = texto.match(regex);
     let conteudo = match ? match[1] : texto;
     const linhas = conteudo.split('\\n').map(l => l.replace(/^\\s+/, '')).filter(l => l.trim() !== '');
     return linhas.join('\\n');
   }
+
   function extrairScenarioGherkin(texto) {
     if (!texto || typeof texto !== "string") return "";
-    const regex = /\\\`\\\`\\\`gherkin\\s*([\\s\\S]*?Scenario)\\\`\\\`\\\`/i;
+    const regex = /\\`\\`\\`gherkin\\s*([\\s\\S]*?Scenario)\\`\\`\\`/i;
     const match = texto.match(regex);
     let conteudo = match ? match[1] : texto;
     const linhas = conteudo.split('\\n').map(l => l.replace(/^\\s+/, '')).filter(l => l.trim() !== '');
     return linhas.join('\\n');
   }
+
+  // function extrairTitulosDosCenarios(texto) {
+  //   if (!texto || typeof texto !== "string") return "";
+  //   const regex = /Scenario\\s*([\\s\\S]*?)\\n/i;
+  //   const match = texto.match(regex);
+  //   let conteudo = match ? match[1] : texto;
+  //   const linhas = conteudo.split('\\n').map(l => l.replace(/^\\s+/, '')).filter(l => l.trim() !== '');
+  //   return linhas.join('\\n');
+  // }
+
   function extrairTitulosDosCenarios(texto) {
-    if (!texto || typeof texto !== "string") return "";
-    const regex = /Scenario\\s*([\\s\\S]*?)\\n/i;
-    const match = texto.match(regex);
-    let conteudo = match ? match[1] : texto;
-    const linhas = conteudo.split('\\n').map(l => l.replace(/^\\s+/, '')).filter(l => l.trim() !== '');
-    return linhas.join('\\n');
+    if (typeof texto !== 'string' || !texto.trim()) return '';
+
+    // normaliza quebras para \n
+    const t = texto.replace(/\r\n?/g, '\n');
+
+    // pega a linha que começa com Scenario/Scenario Outline/Cenário/Esquema do Cenário
+    const m = t.match(
+      /^(?:\s*)(?:Scenario(?:\s+Outline)?|Cenário(?:\s+Esquema)?|Esquema do Cenário)\s*:?\s*(.+)\s*$/mi
+    );
+
+    return m ? m[1].trim() : '';
   }
   
   /* ===== Remover KEY-1234: do título do cenário ===== */
@@ -866,7 +415,7 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
     if (!gherkin) return '';
     let lines = gherkin.split('\\n');
     const keyPattern = keyHint
-      ? new RegExp('(Scenario\\s*:.*?)(?:\\s*' + keyHint.replace(/[.*+?^\${}()|[\\]\\\\]/g, '\\\\$&') + '\\s*:\\s*)', 'i')
+      ? new RegExp('(Scenario\\s*:.*?)(?:\\s*' + keyHint.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\$&') + '\\s*:\\s*)', 'i')
       : /(\\bScenario\\s*:.*?)(?:\\s*[A-Z]+-\\d+\\s*:\\s*)/i;
     
     lines = lines.map((ln) => {
@@ -897,10 +446,12 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
     document.getElementById('loading').style.display = 'block';
     document.querySelector('.container').style.display = 'none';
   }
+
   function esconderLoading() {
     document.getElementById('loading').style.display = 'none';
     document.querySelector('.container').style.display = 'block';
   }
+
   function tentarExibirConteudo() {
     if (nomeRecebido && testesRecebido) esconderLoading();
   }
@@ -957,10 +508,11 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
       const raw              = textareaEl?.value || '';
     
       let folderId = 0;
-      const erroDiv = document.getElementById(\`erro-folder-\${idx}\`);
-      const f3 = document.getElementById(\`folder3-\${idx}\`);
-      const f2 = document.getElementById(\`folder2-\${idx}\`);
-      const f1 = document.getElementById(\`folder1-\${idx}\`);
+      const erroDiv = document.getElementById(`erro-folder-${idx}`);
+      const f3 = document.getElementById(`folder3-${idx}`);
+      const f2 = document.getElementById(`folder2-${idx}`);
+      const f1 = document.getElementById(`folder1-${idx}`);
+
       if (f3 && f3.value) folderId = Number(f3.value);
       else if (f2 && f2.value) folderId = Number(f2.value);
       else if (f1 && f1.value) folderId = Number(f1.value);
@@ -971,6 +523,7 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
         }
         return;
       }
+
       if (erroDiv) erroDiv.style.display = 'none';
     
       const map = getZephyrKeysState();
@@ -1021,8 +574,8 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
       const idx = Number(cb.dataset.idx ?? (cb.id || '').replace('checkbox-',''));
       if (Number.isNaN(idx)) return;
       const map = getZephyrKeysState();
-      const preferredKey = map[idx] || cb.dataset.key || (sugestoesIA && sugestoesIA[idx] && sugestoesIA[idx].key) || \`cenario-\${idx + 1}\`;
-      const raw = document.getElementById(\`textarea-\${idx}\`)?.value || '';
+      const preferredKey = map[idx] || cb.dataset.key || (sugestoesIA && sugestoesIA[idx] && sugestoesIA[idx].key) || `cenario-${idx + 1}`;
+      const raw = document.getElementById(`textarea-${idx}`)?.value || '';
       const gherkin = extrairGherkin(raw) || raw;
       const gherkinSanit = sanitizeScenarioTitle(gherkin, preferredKey);
       if (gherkinSanit.trim()) itens.push({ key: preferredKey, gherkin: gherkinSanit, issueId, issueKey });
@@ -1030,7 +583,7 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
     
     if (itens.length === 0 && Array.isArray(testesZephyrRaw) && testesZephyrRaw.length > 0) {
       testesZephyrRaw.forEach((t, zIdx) => {
-        const key = t?.key || \`cenario-\${zIdx + 1}\`;
+        const key = t?.key || `cenario-${zIdx + 1}`;
         const zephyrName = (t?.details?.name || '').trim();
         const gRaw = extrairGherkin(t?.script || '');
         const gSan = sanitizeScenarioTitle(gRaw, key);
@@ -1063,41 +616,41 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
       header.innerHTML = "<p>❌ Issue não encontrada.</p>";
       tests.innerHTML = '';
     } else {
-      header.innerHTML = \`<p><strong>🧪 Testes vinculados (Zephyr):</strong></p>\`;
-      tests.innerHTML = \`
-        \${i.testesZephyr.map((t, idx) => \`
+      header.innerHTML = `<p><strong>🧪 Testes vinculados (Zephyr):</strong></p>`;
+      tests.innerHTML = `
+        ${i.testesZephyr.map((t, idx) => `
         <div style="border: 1px solid #444; padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem; background-color: #2a2a2a;">
           <h3 style="color: #4fc3f7; margin-bottom: 0.5rem;">
-            🔹 \${t.key} (v\${t.version}) - \${t.details.name}
+            🔹 ${t.key} (v${t.version}) - ${t.details.name}
           </h3>
           <div style="background-color: #3c3c3c; padding: 0.8rem; border-radius: 6px; margin-bottom: 1rem;">
-            <p><strong>🤖 Automation Status: </strong> \${t.details.customFields?.['Automation Status'] || 'N/A'}</p>
-            <p><strong>🏷️ Test Class: </strong> \${t.details.customFields?.['Test Class'] || 'N/A'}</p>
-            <p><strong>📦 Test Type: </strong> \${t.details.customFields?.['Test Type'] || 'N/A'}</p>
-            <p><strong>🧪 Test Group: </strong> \${t.details.customFields?.['Test Group'] || 'N/A'}</p>
+            <p><strong>🤖 Automation Status: </strong> ${t.details.customFields?.['Automation Status'] || 'N/A'}</p>
+            <p><strong>🏷️ Test Class: </strong> ${t.details.customFields?.['Test Class'] || 'N/A'}</p>
+            <p><strong>📦 Test Type: </strong> ${t.details.customFields?.['Test Type'] || 'N/A'}</p>
+            <p><strong>🧪 Test Group: </strong> ${t.details.customFields?.['Test Group'] || 'N/A'}</p>
           </div>
-          <pre style="background-color: #1e1e1e; padding: 1rem; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; color: #ccc;">\${t.script}</pre>
+          <pre style="background-color: #1e1e1e; padding: 1rem; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; color: #ccc;">${t.script}</pre>
   
-          <div id="ia-container-\${idx}" style="display:none;">
+          <div id="ia-container-${idx}" style="display:none;">
             <div class="sugestao">
-              <h3><span id="cenarioLabel-\${idx}"></span></h3>
-              <textarea id="textarea-\${idx}" oninput="salvarEstado()">Carregando sugestão da IA...</textarea>
+              <h3><span id="cenarioLabel-${idx}"></span></h3>
+              <textarea id="textarea-${idx}" oninput="salvarEstado()">Carregando sugestão da IA...</textarea>
             </div>
             <div class="checkbox-container">
               <input
                 type="checkbox"
                 class="checkbox-ia"
-                id="checkbox-\${idx}"
-                data-idx="\${idx}"
-                data-key="\${t.key}"
+                id="checkbox-${idx}"
+                data-idx="${idx}"
+                data-key="${t.key}"
                 onchange="salvarEstado()"
               />
-              <label for="checkbox-\${idx}">Aceitar sugestão para este cenário</label>
+              <label for="checkbox-${idx}">Aceitar sugestão para este cenário</label>
             </div>
           </div>
-        </div>\`).join('')}
-      \`;
-      sugestoesIA = i.testesZephyr.map((t, idx) => ({ key: t.key, suggestion: \`Sugestão da IA para \${t.key}...\` }));
+        </div>`).join('')}
+      `;
+      sugestoesIA = i.testesZephyr.map((t, idx) => ({ key: t.key, suggestion: `Sugestão da IA para ${t.key}...` }));
     }
     container.style.display = 'block';
     loadFormState();
@@ -1116,31 +669,31 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
     div.className = 'sugestao';
     div.id = 'sugestao-' + idx;
     div.style ='border: 1px solid #444; padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem; background-color: #2a2a2a';
-    div.innerHTML = \`
+    div.innerHTML = `
       <h3 style="color: #4fc3f7; margin-bottom: 0.5rem;">
-        <span id="cenarioLabel-\${idx}">📝 Cenário \${manual ? '(Manual)' : '(IA)'}:</span> \${extrairTitulosDosCenarios(conteudo)}
+        <span id="cenarioLabel-${idx}">📝 Cenário ${manual ? '(Manual)' : '(IA)'}:</span> ${extrairTitulosDosCenarios(conteudo)}
       </h3>
       <div style="background-color: #3c3c3c; padding: 0.8rem; border-radius: 6px; margin-bottom: 1rem;">
-        <p><strong>🤖 Automation Status: </strong><span id="automationStatus-\${idx}">Not Automated</span></p>
-        <p><strong>🏷️ Test Class: </strong><span id="testClass-\${idx}">\${testClass}</span></p>
-        <p><strong>📦 Test Type: </strong><span id="testType-\${idx}">\${testType}</span></p>
-        <p><strong>🧪 Test Group: </strong><span id="testGroup-\${idx}">\${testGroup}</span></p>
+        <p><strong>🤖 Automation Status: </strong><span id="automationStatus-${idx}">Not Automated</span></p>
+        <p><strong>🏷️ Test Class: </strong><span id="testClass-${idx}">${testClass}</span></p>
+        <p><strong>📦 Test Type: </strong><span id="testType-${idx}">${testType}</span></p>
+        <p><strong>🧪 Test Group: </strong><span id="testGroup-${idx}">${testGroup}</span></p>
         <label>📁 Produto:</label>
-        <select id="folder1-\${idx}" onchange="onFolderChange(\${idx}, 1)"><option value="">Selecione...</option></select>
+        <select id="folder1-${idx}" onchange="onFolderChange(${idx}, 1)"><option value="">Selecione...</option></select>
         <label>📁 Sub-Produto:</label>
-        <select id="folder2-\${idx}" onchange="onFolderChange(\${idx}, 2)" style="display:none;"></select>
+        <select id="folder2-${idx}" onchange="onFolderChange(${idx}, 2)" style="display:none;"></select>
         <label>📁 Funcionalidade:</label>
-        <select id="folder3-\${idx}" onchange="onFolderChange(\${idx}, 3)" style="display:none;"></select>
+        <select id="folder3-${idx}" onchange="onFolderChange(${idx}, 3)" style="display:none;"></select>
       </div>
-      <textarea id="textarea-\${idx}" oninput="salvarEstado()">\${conteudo}</textarea>
+      <textarea id="textarea-${idx}" oninput="salvarEstado()">${conteudo}</textarea>
       <div class="checkbox-container">
-        <input type="checkbox" class="checkbox-ia" id="checkbox-\${idx}" data-idx="\${idx}" onchange="salvarEstado()" />
-        <label for="checkbox-\${idx}">Aceitar este cenário</label>
+        <input type="checkbox" class="checkbox-ia" id="checkbox-${idx}" data-idx="${idx}" onchange="salvarEstado()" />
+        <label for="checkbox-${idx}">Aceitar este cenário</label>
       </div>
-      <div id="erro-folder-\${idx}" style="display: none; color: red; font-weight: bold; margin-top: 10px;"></div>
+      <div id="erro-folder-${idx}" style="display: none; color: red; font-weight: bold; margin-top: 10px;"></div>
       <hr style="margin: 1rem 0; border: 0; border-top: 1px solid #444;" />
-      <button class="btn-excluir" onclick="excluirCenario(\${idx})">🗑️ Excluir</button>
-    \`;
+      <button class="btn-excluir" onclick="excluirCenario(${idx})">🗑️ Excluir</button>
+    `;
     container.appendChild(div);
     applyFolderSelectionsToDOM(idx);
     loadFormState();
@@ -1149,9 +702,9 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
   
   /* ======= Handlers dos selects (salvam estado e populam cascata) ======= */
   function onFolderChange(idx, level) {
-    const s1 = document.getElementById(\`folder1-\${idx}\`);
-    const s2 = document.getElementById(\`folder2-\${idx}\`);
-    const s3 = document.getElementById(\`folder3-\${idx}\`);
+    const s1 = document.getElementById(`folder1-${idx}`);
+    const s2 = document.getElementById(`folder2-${idx}`);
+    const s3 = document.getElementById(`folder3-${idx}`);
     
     if (level === 1 && s1) {
       const v1 = s1.value || '';
@@ -1694,15 +1247,13 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
     document.addEventListener('DOMContentLoaded', () => {
       wireFolderSelectionChange();
       requestFiltersOptionsNow();
+      bindButtons();
+      bindFeatureForm();
     });
   } else {
     wireFolderSelectionChange();
     requestFiltersOptionsNow();
+    bindButtons();
+    bindFeatureForm();
   }
 })();
-</script>
-  </body>
-  </html>
-  `;
-}
-exports.getZephyrViewContent = getZephyrViewContent;

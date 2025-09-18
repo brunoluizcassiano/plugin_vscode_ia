@@ -3,12 +3,20 @@ import { getZephyrViewContent } from '../view/zephyr/zephyrView';
 import { generateFeatures } from '../generators/features/featureGenerator';
 import { generateSteps }    from '../generators/steps/stepsGenerator';
 import path from 'path';
+
 type Selecionado = {
   key: string;          // key do teste no Zephyr (ou "Manual_*")
   texto: string;        // Gherkin a ser usado
   issueId?: string;
   issueKey?: string;
 };
+
+function getNonce() {
+  let text = '';
+  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  for (let i = 0; i < 32; i++) text += possible.charAt(Math.floor(Math.random() * possible.length));
+  return text;
+}
 
 // ===== Helpers: aplicar filtros somente para SELECTs (sem Coverage/Owner/Label) =====
 function _zNorm(v: any): string {
@@ -92,7 +100,21 @@ export class ZephyrPanel {
     this.issueId = issueId;
     this.issueKey = issueKey;
     this.comentario = comentario;
-    this._panel.webview.html = getZephyrViewContent();
+    const webview = this._panel.webview;
+
+    // Gera URIs seguros para os assets da webview
+    const styleUri  = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'view', 'style', 'style.css'));
+    // Opcional: se mover o JS inline para arquivo externo
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'view', 'zephyr', 'zephyr.js'));
+    const nonce = getNonce();
+
+    // Passa os URIs/nonce para a view (ajuste a assinatura de getZephyrViewContent)
+    this._panel.webview.html = getZephyrViewContent({
+      webview,
+      nonce,
+      styleUri: String(styleUri),
+      scriptUri: String(scriptUri)
+    });
     // 🎧 Ouvindo mensagens do HTML
     this._panel.webview.onDidReceiveMessage(this.handleMessage.bind(this));
     // 🧹 Limpa referência ao fechar
@@ -442,11 +464,20 @@ const testesZephyr = applyZephyrSelectFilters(_raw, filtros).map(mapZephyrTestsF
       }
     } else {
       const panel = vscode.window.createWebviewPanel(
-        'zephyrView',
-        'Zephyr',
-        column,
-        { enableScripts: true }
-      );
+      'zephyrView',
+      'Zephyr',
+      column,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true, // preserva DOM/JS ao trocar de aba
+        localResourceRoots: [
+          vscode.Uri.joinPath(extensionUri, 'src', 'view', 'style'),
+          vscode.Uri.joinPath(extensionUri, 'src', 'view', 'zephyr'),
+          vscode.Uri.joinPath(extensionUri, 'media'), // se no futuro mover assets para /media
+          vscode.Uri.joinPath(extensionUri, 'out'),   // se gerar bundles
+        ],
+      }
+    );
       ZephyrPanel.currentPanel = new ZephyrPanel(panel, extensionUri, issueId, issueKey, comentario);
     }
   }

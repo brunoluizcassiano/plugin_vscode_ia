@@ -1,4 +1,3 @@
-"use strict";
 // import * as vscode from 'vscode';
 // import { getZephyrViewContent } from '../view/zephyr/zephyrView';
 // import { generateFeatures } from '../generators/features/featureGenerator';
@@ -10,6 +9,7 @@
 //   issueId?: string;
 //   issueKey?: string;
 // };
+
 // // ===== Helpers: aplicar filtros somente para SELECTs (sem Coverage/Owner/Label) =====
 // function _zNorm(v: any): string {
 //   if (v === null || v === undefined) return '';
@@ -47,6 +47,7 @@
 //  */
 // function applyZephyrSelectFilters(rawTests: any[], filtros: any): any[] {
 //   if (!Array.isArray(rawTests) || !filtros || typeof filtros !== 'object') return rawTests || [];
+
 //   const sel = {
 //     automationStatus: _zNorm((filtros as any).automationStatus),
 //     status:           _zNorm((filtros as any).status),
@@ -55,6 +56,7 @@
 //     testGroup:        _zNorm((filtros as any).testGroup),
 //   };
 //   const use = (val: string) => (val && val.toUpperCase() !== 'N/A');
+
 //   const out: any[] = [];
 //   for (const t of rawTests) {
 //     const aut    = _zNormAutomation(_zFrom(t, ['automationStatus','automation','automated'], ['Automation status','Automation Status','Automação']));
@@ -62,6 +64,7 @@
 //     const ttype  = _zFrom(t, ['testType','type'], ['Test Type','Tipo']);
 //     const tclass = _zFrom(t, ['testClass','class'], ['Test Class','Classe']);
 //     const tgroup = _zFrom(t, ['testGroup','group'], ['Test Group','Grupo']);
+
 //     if (use(sel.automationStatus)) {
 //       const want = _zNormAutomation(sel.automationStatus);
 //       if (!want || want !== aut) continue;
@@ -70,10 +73,12 @@
 //     if (use(sel.testType)  && !_zEqualsCi(ttype,  sel.testType))  continue;
 //     if (use(sel.testClass) && !_zEqualsCi(tclass, sel.testClass)) continue;
 //     if (use(sel.testGroup) && !_zEqualsCi(tgroup, sel.testGroup)) continue;
+
 //     out.push(t);
 //   }
 //   return out;
 // }
+
 // export class ZephyrPanel {
 //   public static currentPanel: ZephyrPanel | undefined;
 //   private readonly _panel: vscode.WebviewPanel;
@@ -303,6 +308,7 @@
 //           });
 //         }
 //       } else if (message.type === 'criarScriptsEmPasta') {
+        
 //         vscode.window.showWarningMessage(`message.dados: ${JSON.stringify(message.dados)}`);
 //         const caminho = message.dados.caminho;
 //         const itens = message.dados.itens;
@@ -311,6 +317,7 @@
 //         const fileBaseName = message.dados.fileBaseName;
 //         const tribeName = message.dados.tribeName;
 //         const extraTags = message.dados.extraTags;
+  
 //         if (!caminho) {
 //           vscode.window.showWarningMessage('Selecione uma pasta de destino antes de enviar.');
 //           return;
@@ -340,6 +347,7 @@
 //           const projects = await vscode.commands.executeCommand<any[]>(
 //             'plugin-vscode.getJiraProjects'
 //           );
+
 //           // Devolve para a webview exatamente no formato que ela espera
 //           this._panel.webview.postMessage({
 //             type: 'projetosJira',
@@ -356,6 +364,7 @@
 //               'plugin-vscode.getZephyrFoldersByProject',
 //               projectKey // já é a KEY
 //             );
+
 //             this._panel.webview.postMessage({
 //               type: 'estruturaProjeto',
 //               folders: resultado?.folders || [], // árvore
@@ -372,9 +381,11 @@
 //           const projectKey: string = message.projetoIdOuKey || '';
 //           const pastaIds: string[] = Array.isArray(message.pastaIds) ? message.pastaIds : [];
 //           const folderId = pastaIds[0]; // seleção única (pela UI nova)
+
 //           if (!projectKey || !folderId) {
 //             throw new Error('Projeto e pasta são obrigatórios.');
 //           }
+
 //           // Chame seu comando que retorna os testes de UMA pasta.
 //           // Se o seu já aceita múltiplas pastas, passe o array completo.
 //           // Ajuste o nome do command se o seu for diferente.
@@ -384,9 +395,11 @@
 //             folderId,
 //             { recursive: false } // se quiser incluir subpastas, troque para true no seu command
 //           );
+
 //           const filtros = (message && (message as any).filtros) ? (message as any).filtros : {};
 // const _raw = Array.isArray(rawTests) ? rawTests : [];
 // const testesZephyr = applyZephyrSelectFilters(_raw, filtros).map(mapZephyrTestsForWebview);
+
 //           // Enviamos direto no formato que a webview já trata e renderiza
 //           this._panel.webview.postMessage({
 //             type: 'zephyrDataProjeto',
@@ -472,6 +485,7 @@
 //     }
 //   }  
 // }
+
 // // (opcional, mas recomendado) — normaliza o shape dos testes pro que a webview espera
 // function mapZephyrTestsForWebview(raw: any): any {
 //   if (!raw || typeof raw !== 'object') return raw;
