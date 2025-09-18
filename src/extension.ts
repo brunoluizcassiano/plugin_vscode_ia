@@ -839,7 +839,8 @@ async function enviarCriarCenarioComCopilot(token: string, threadId: string, use
   console.log('🔍 Copilot cenario Original:', cenarioOriginal);
   const payload = {
     responseMessageID: crypto.randomUUID(),
-    content: `Com base na análise da user story abaixo, crie cenários de testes e realize as seguintes ações:
+    content: `Você é um analista de QA funcional. Avalie a user story a seguir priorizando visão de negócio e jornada do cliente, NÃO aspectos técnicos e crie a maior quantidade de testes possiveis e aplique tecnicas de testes avançadas.
+              Com base na análise da user story abaixo, crie cenários de testes e realize as seguintes ações:
                     1. Classifique o tipo do teste criado (**Test Type**): escolha entre *End to End*, *Regression*, *Acceptance* ou *UI*.  
                     2. Classifique o cenário como **Test Class**: *Positive* ou *Negative*.  
                     3. Classifique o cenário como **Test Group**: *Backend*, *Front-End* ou *Desktop*.
@@ -904,7 +905,8 @@ async function enviarCenarioParaCopilot(token: string, threadId: string, userSto
   console.log('🔍 Copilot cenario Original:', cenarioOriginal);
   const payload = {
     responseMessageID: crypto.randomUUID(),
-    content: `Com base na análise da user story abaixo, avalie também o cenário de teste fornecido e realize as seguintes ações:
+    content: `Você é um analista de QA funcional. Avalie a user story a seguir priorizando visão de negócio e jornada do cliente, NÃO aspectos técnicos e crie a maior quantidade de testes possiveis e aplique tecnicas de testes avançadas.
+              Com base na análise da user story abaixo, avalie também o cenário de teste fornecido e realize as seguintes ações:
                     1. Classifique o tipo do teste fornecido: **funcional, integração ou end-to-end**.  
                     2. Avalie se o cenário cobre o comportamento esperado da user story.  
                     3. Aponte se há pontos técnicos ou termos inadequados para testes de aceitação.  

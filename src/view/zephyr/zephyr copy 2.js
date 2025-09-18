@@ -1,5 +1,4 @@
 const vscode = acquireVsCodeApi();
-
 let nomeRecebido = false;
 let testesRecebido = false;
 let issueId = "";
@@ -8,12 +7,7 @@ let sugestoesIA = [];
 let testesZephyrRaw = [];
 let pastasPrincipaisCache = [];
 let caminhoPasta = null;
-let _todosProjetos = [];
-let _projetoSelecionado = '';
-let _selectedFolderId = null;
-
-const NA = 'N/A';
-
+/* ===== Fluxo por projeto (refs) ===== */
 const projectFlow = {
   root: document.getElementById('projectFlow'),
   select: document.getElementById('projectSelect'),
@@ -22,7 +16,7 @@ const projectFlow = {
   btnApply: document.getElementById('btnApplyStructure'),
   loading: document.getElementById('projLoading')
 };
-
+// IDs reais dos filtros
 const FILTER_IDS = {
   automationStatus: 'fltAutomationStatus',
   status: 'fltStatus',
@@ -31,7 +25,7 @@ const FILTER_IDS = {
   testGroup: 'fltTestGroup',
   clearBtn: 'btnClearFilters',
 };
-
+// Nós DOM (JS puro – sem type assertions)
 const $filters = {
   automationStatus: document.getElementById(FILTER_IDS.automationStatus),
   status: document.getElementById(FILTER_IDS.status),
@@ -40,13 +34,12 @@ const $filters = {
   testGroup: document.getElementById(FILTER_IDS.testGroup),
   clearBtn: document.getElementById(FILTER_IDS.clearBtn),
 };
-
+// opções padrão
 const META_OPTIONS = {
   testClass: ['N/A', 'Positive', 'Negative'],
   testType: ['N/A', 'Acceptance', 'End To End', 'Regression', 'Sanity', 'Security', 'Performance', 'UI'],
   testGroup: ['N/A', 'Backend', 'Desktop', 'Front-End'],
 };
-
 function makeSelect(id, values, selected) {
   const sel = document.createElement('select');
   sel.id = id;
@@ -59,23 +52,19 @@ function makeSelect(id, values, selected) {
   });
   return sel;
 }
-
 function getMetaState() {
   return (vscode.getState()?.metaByIdx) || {};
 }
-
 function setMetaState(metaByIdx) {
   const st = vscode.getState() || {};
   vscode.setState({ ...st, metaByIdx });
 }
-
 function updateMetaForIdx(idx, partial) {
   const meta = getMetaState();
   const prev = meta[idx] || {};
   meta[idx] = { ...prev, ...partial };
   setMetaState(meta);
 }
-
 function bindMetaSelects(idx) {
   const $ = (id) => document.getElementById(id);
   const sc = $(`metaTestClass-${idx}`);
@@ -92,9 +81,9 @@ function bindMetaSelects(idx) {
     });
   });
 }
-
+// Helpers
+const NA = 'N/A';
 function normalize(v) { return v === NA ? '' : (v || ''); }
-
 function getFiltersFromUI() {
   return {
     automationStatus: normalize($filters.automationStatus && $filters.automationStatus.value),
@@ -104,7 +93,6 @@ function getFiltersFromUI() {
     testGroup: normalize($filters.testGroup && $filters.testGroup.value),
   };
 }
-
 function applyFiltersToUI(filters) {
   if (!filters) return;
   if ($filters.automationStatus) $filters.automationStatus.value = filters.automationStatus || NA;
@@ -113,17 +101,15 @@ function applyFiltersToUI(filters) {
   if ($filters.testClass) $filters.testClass.value = filters.testClass || NA;
   if ($filters.testGroup) $filters.testGroup.value = filters.testGroup || NA;
 }
-
 function saveFiltersToState() {
   const s = vscode.getState() || {};
   vscode.setState({ ...s, filtros: getFiltersFromUI() });
 }
-
 function getFiltersFromState() {
   const s = vscode.getState() || {};
   return s.filtros || {};
 }
-
+// Encapsula binding (chame no Boot, depois de montar a UI)
 function bindFilterListeners() {
   [$filters.automationStatus, $filters.status, $filters.testType, $filters.testClass, $filters.testGroup]
     .forEach((el) => {
@@ -155,7 +141,6 @@ function bindFilterListeners() {
     });
   }
 }
-
 function bindButtons() {
   const byId = (id) => document.getElementById(id);
   byId('btnAnalisar')?.addEventListener('click', analisarIA);
@@ -166,18 +151,17 @@ function bindButtons() {
   byId('btnCriarScripts')?.addEventListener('click', enviarCriarScripts);
   byId('selecionarPasta')?.addEventListener('click', selecionarPasta);
 }
-
 function bindFeatureForm() {
   const form = document.getElementById('formulario');
   if (form) {
     form.addEventListener('submit', handleSubmit); // <-- sem inline, compatível com CSP
   }
 }
-
+let _todosProjetos = [];
+let _projetoSelecionado = '';
+let _selectedFolderId = null;
 function show(el) { if (el) el.style.display = 'block'; }
-
 function hide(el) { if (el) el.style.display = 'none'; }
-
 function showProjectFlow() {
   document.getElementById('issueHeader').style.display = 'none';
   document.getElementById('issueTests').style.display = 'none';
@@ -189,7 +173,6 @@ function showProjectFlow() {
   hide(projectFlow.structure);
   projectFlow.btnApply.disabled = true;
 }
-
 function showIssueFlow() {
   document.getElementById('issueHeader').style.display = 'block';
   document.getElementById('issueTests').style.display = 'block';
@@ -197,7 +180,6 @@ function showIssueFlow() {
   if (tb) tb.style.display = 'flex';
   hide(projectFlow.root);
 }
-
 function setProjLoading(on, text) {
   if (on) {
     projectFlow.loading.textContent = text || 'Carregando...';
@@ -206,16 +188,15 @@ function setProjLoading(on, text) {
     hide(projectFlow.loading);
   }
 }
-
 function mountProjetos(list) {
   _todosProjetos = Array.isArray(list) ? list : [];
   projectFlow.select.innerHTML = '<option value="">Selecione...</option>' +
     _todosProjetos.map(p => '<option value="' + (p.id || p.key) + '">' + (p.name || p.key || '') + (p.key ? ' (' + p.key + ')' : '') + '</option>').join('');
   setAppState({ projetosCache: _todosProjetos });
 }
-
 /* ========= Árvore de pastas (sem checkbox) ========= */
 function ensureTree(list) {
+  // aceita lista já aninhada (com children) ou plana (id, parentId, name)
   if (!Array.isArray(list)) return [];
   if (list.length && list[0] && Array.isArray(list[0].children)) return list;
   const map = {};
@@ -229,11 +210,9 @@ function ensureTree(list) {
   });
   return roots;
 }
-
 function isManual(idx) {
   return !!document.getElementById(`metaTestClass-${idx}`);
 }
-
 function buildTreeHTML(nodes) {
   if (!nodes || !nodes.length) return '<div style="color:#ccc;">Nenhuma pasta encontrada.</div>';
   let html = '';
@@ -251,7 +230,6 @@ function buildTreeHTML(nodes) {
   nodes.forEach(walk);
   return html;
 }
-
 function escapeHTML(s) {
   return String(s)
     .replace(/&/g, '&amp;')
@@ -260,31 +238,29 @@ function escapeHTML(s) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
-
 function renderFolderTree(list) {
   const tree = ensureTree(list || []);
   projectFlow.folderTree.innerHTML = buildTreeHTML(tree);
   _selectedFolderId = null;
   projectFlow.btnApply.disabled = true;
 }
-
 function selectFolderById(id) {
+  // persist selected folder id
   setAppState({ selectedFolderId: id });
   _selectedFolderId = id;
   projectFlow.btnApply.disabled = !id;
+  // limpa seleção anterior
   projectFlow.folderTree.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
+  // marca selecionado (summary ou leaf)
   const target = projectFlow.folderTree.querySelector('[data-id="' + id + '"]');
   if (target) target.classList.add('selected');
 }
-
 function getSelectedFolderIds() {
   return _selectedFolderId ? [_selectedFolderId] : [];
 }
-
 /* ===================== State helpers ====================== */
 function getAppState() { return vscode.getState() || {}; }
 function setAppState(patch) { const cur = getAppState(); vscode.setState({ ...cur, ...patch }); }
-
 /* -------- Form state -------- */
 function saveFormState(patch = {}) {
   const form = {
@@ -298,7 +274,6 @@ function saveFormState(patch = {}) {
   };
   setAppState({ form: { ...form, ...patch } });
 }
-
 function loadFormState() {
   const { form } = getAppState();
   if (!form) return;
@@ -316,7 +291,6 @@ function loadFormState() {
   const formEl = document.getElementById('formulario');
   if (formEl) formEl.style.display = form.formVisible ? 'block' : 'none';
 }
-
 /* -------- Zephyr Keys state (persistido) -------- */
 function getZephyrKeysState() { return getAppState().zephyrKeys || {}; }
 function setZephyrKeysState(map) { setAppState({ zephyrKeys: map }); }
