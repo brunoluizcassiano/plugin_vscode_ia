@@ -308,120 +308,63 @@ function applyZephyrKeys() {
     setFolderSelections(map);
   }
 
-  // function applyFolderSelectionsToDOM(idx) {
-  //   const selMap = getFolderSelections();
-  //   const sel = selMap[idx] || {};
-  //   const s1 = document.getElementById(`folder1-${idx}`);
-  //   const s2 = document.getElementById(`folder2-${idx}`);
-  //   const s3 = document.getElementById(`folder3-${idx}`);
-  
-  //   if (s1 && s1.options.length <= 1) {
-  //     s1.innerHTML = '<option value="">Selecione...</option>';
-  //     pastasPrincipaisCache.forEach(p => {
-  //       if (p.parentId == null) {
-  //         const opt = document.createElement('option');
-  //         opt.value = p.key;
-  //         opt.textContent = p.name;
-  //         s1.appendChild(opt);
-  //       }
-  //     });
-  //   }
-  //   if (s1 && s1.value !== String(sel.f1)) s1.value = (sel.f1 ?? '');
-  
-  //   if (s2) {
-  //     s2.innerHTML = '<option value="">Selecione...</option>';
-  //     if (sel.f1) {
-  //       pastasPrincipaisCache.forEach(p => {
-  //         if (p.parentId == Number(sel.f1)) {
-  //           const opt = document.createElement('option');
-  //           opt.value = p.key;
-  //           opt.textContent = p.name;
-  //           s2.appendChild(opt);
-  //         }
-  //       });
-  //       s2.style.display = 'inline-block';
-  //       if (sel.f2 != null && sel.f2 !== '') s2.value = String(sel.f2);
-  //     } else {
-  //       s2.style.display = 'none';
-  //     }
-  //   }
-  
-  //   if (s3) {
-  //     s3.innerHTML = '<option value="">Selecione...</option>';
-  //     if (sel.f2) {
-  //       pastasPrincipaisCache.forEach(p => {
-  //         if (p.parentId == Number(sel.f2)) {
-  //           const opt = document.createElement('option');
-  //           opt.value = p.key;
-  //           opt.textContent = p.name;
-  //           s3.appendChild(opt);
-  //         }
-  //       });
-  //       s3.style.display = 'inline-block';
-  //       if (sel.f3 != null && sel.f3 !== '') s3.value = String(sel.f3);
-  //     } else {
-  //       s3.style.display = 'none';
-  //     }
-  //   }
-  // }
-
   function applyFolderSelectionsToDOM(idx) {
-  const s1 = document.getElementById(`folder1-${idx}`);
-  const s2 = document.getElementById(`folder2-${idx}`);
-  const s3 = document.getElementById(`folder3-${idx}`);
-  if (!s1 || !s2 || !s3) return;
-
-  // limpa e recomeça
-  s1.innerHTML = `<option value="">Selecione...</option>`;
-  s2.innerHTML = `<option value="">Selecione...</option>`;
-  s3.innerHTML = `<option value="">Selecione...</option>`;
-  s2.style.display = 'none';
-  s3.style.display = 'none';
-
-  // ROOT (Produto) — use ID!
-  (pastasPrincipaisCache || []).forEach(p => {
-    if (!p.parentId) {
-      const opt = document.createElement('option');
-      opt.value = String(p.id);             // <<<<<<<<<<<<<< AQUI
-      opt.textContent = p.name || '';
-      s1.appendChild(opt);
+    const selMap = getFolderSelections();
+    const sel = selMap[idx] || {};
+    const s1 = document.getElementById(`folder1-${idx}`);
+    const s2 = document.getElementById(`folder2-${idx}`);
+    const s3 = document.getElementById(`folder3-${idx}`);
+  
+    if (s1 && s1.options.length <= 1) {
+      s1.innerHTML = '<option value="">Selecione...</option>';
+      pastasPrincipaisCache.forEach(p => {
+        if (p.parentId == null) {
+          const opt = document.createElement('option');
+          opt.value = p.key;
+          opt.textContent = p.name;
+          s1.appendChild(opt);
+        }
+      });
     }
-  });
-
-  // Se já havia seleção salva, reconstituir (opcional)
-  const sel = getFolderSelection(idx) || {}; // { f1, f2, f3 } salvos no state
-  if (sel.f1) {
-    s1.value = String(sel.f1);
-    // filhos de f1 para o Sub-Produto
-    (pastasPrincipaisCache || []).forEach(p => {
-      if (p.parentId == Number(sel.f1)) {
-        const opt = document.createElement('option');
-        opt.value = String(p.id);           // <<<<<<<<<<<<<< AQUI
-        opt.textContent = p.name || '';
-        s2.appendChild(opt);
+    if (s1 && s1.value !== String(sel.f1)) s1.value = (sel.f1 ?? '');
+  
+    if (s2) {
+      s2.innerHTML = '<option value="">Selecione...</option>';
+      if (sel.f1) {
+        pastasPrincipaisCache.forEach(p => {
+          if (p.parentId == Number(sel.f1)) {
+            const opt = document.createElement('option');
+            opt.value = p.key;
+            opt.textContent = p.name;
+            s2.appendChild(opt);
+          }
+        });
+        s2.style.display = 'inline-block';
+        if (sel.f2 != null && sel.f2 !== '') s2.value = String(sel.f2);
+      } else {
+        s2.style.display = 'none';
       }
-    });
-    if (s2.options.length > 1) s2.style.display = 'inline-block';
-  }
-  if (sel.f2) {
-    s2.value = String(sel.f2);
-    // filhos de f2 para a Funcionalidade
-    (pastasPrincipaisCache || []).forEach(p => {
-      if (p.parentId == Number(sel.f2)) {
-        const opt = document.createElement('option');
-        opt.value = String(p.id);           // <<<<<<<<<<<<<< AQUI
-        opt.textContent = p.name || '';
-        s3.appendChild(opt);
+    }
+  
+    if (s3) {
+      s3.innerHTML = '<option value="">Selecione...</option>';
+      if (sel.f2) {
+        pastasPrincipaisCache.forEach(p => {
+          if (p.parentId == Number(sel.f2)) {
+            const opt = document.createElement('option');
+            opt.value = p.key;
+            opt.textContent = p.name;
+            s3.appendChild(opt);
+          }
+        });
+        s3.style.display = 'inline-block';
+        if (sel.f3 != null && sel.f3 !== '') s3.value = String(sel.f3);
+      } else {
+        s3.style.display = 'none';
       }
-    });
-    if (s3.options.length > 1) s3.style.display = 'inline-block';
+    }
   }
-  if (sel.f3) {
-    s3.value = String(sel.f3);
-  }
-}
-
-
+  
   function rehydrateAllFolderSelections() {
     const selMap = getFolderSelections();
     Object.keys(selMap).forEach(i => applyFolderSelectionsToDOM(Number(i)));
@@ -729,11 +672,11 @@ function applyZephyrKeys() {
         <p><strong>📦 Test Type: </strong><span id="testType-${idx}">${testType}</span></p>
         <p><strong>🧪 Test Group: </strong><span id="testGroup-${idx}">${testGroup}</span></p>
         <label>📁 Produto:</label>
-        <select id="folder1-${idx}" onchange="onFolderChange(${idx}, 1)"><option value="">Selecione...</option></select>
+        <select id="folder1-${idx}"><option value="">Selecione...</option></select>
         <label>📁 Sub-Produto:</label>
-        <select id="folder2-${idx}" onchange="onFolderChange(${idx}, 2)" style="display:none;"></select>
+        <select id="folder2-${idx}" style="display:none;"></select>
         <label>📁 Funcionalidade:</label>
-        <select id="folder3-${idx}" onchange="onFolderChange(${idx}, 3)" style="display:none;"></select>
+        <select id="folder3-${idx}" style="display:none;"></select>
       </div>
       <textarea id="textarea-${idx}" oninput="salvarEstado()">${conteudo}</textarea>
       <div class="checkbox-container">
@@ -745,125 +688,74 @@ function applyZephyrKeys() {
       <button class="btn-excluir" onclick="excluirCenario(${idx})">🗑️ Excluir</button>
     `;
     container.appendChild(div);
+    
+    // liga os eventos de cascata sem inline (CSP-safe)
+    const f1 = document.getElementById(`folder1-${idx}`);
+    const f2 = document.getElementById(`folder2-${idx}`);
+    const f3 = document.getElementById(`folder3-${idx}`);
+    f1?.addEventListener('change', () => onFolderChange(idx, 1));
+    f2?.addEventListener('change', () => onFolderChange(idx, 2));
+    f3?.addEventListener('change', () => onFolderChange(idx, 3));
+    
     applyFolderSelectionsToDOM(idx);
     loadFormState();
     applyZephyrKeys();
   }
   
   /* ======= Handlers dos selects (salvam estado e populam cascata) ======= */
-  // function onFolderChange(idx, level) {
-  //   const s1 = document.getElementById(`folder1-${idx}`);
-  //   const s2 = document.getElementById(`folder2-${idx}`);
-  //   const s3 = document.getElementById(`folder3-${idx}`);
-    
-  //   if (level === 1 && s1) {
-  //     const v1 = s1.value || '';
-  //     saveFolderSelection(idx, 1, v1);
-  //     if (s2) {
-  //       s2.innerHTML = '<option value="">Selecione...</option>';
-  //       if (v1) {
-  //         pastasPrincipaisCache.forEach(p => {
-  //           if (p.parentId == Number(v1)) {
-  //             const opt = document.createElement('option');
-  //             opt.value = p.key;
-  //             opt.textContent = p.name;
-  //             s2.appendChild(opt);
-  //           }
-  //         });
-  //         s2.style.display = 'inline-block';
-  //       } else {
-  //         s2.style.display = 'none';
-  //       }
-  //     }
-  //     if (s3) { s3.innerHTML = '<option value="">Selecione...</option>'; s3.style.display = 'none'; }
-  //   }
-    
-  //   if (level === 2 && s2) {
-  //     const v2 = s2.value || '';
-  //     saveFolderSelection(idx, 2, v2);
-  //     if (s3) {
-  //       s3.innerHTML = '<option value="">Selecione...</option>';
-  //       if (v2) {
-  //         pastasPrincipaisCache.forEach(p => {
-  //           if (p.parentId == Number(v2)) {
-  //             const opt = document.createElement('option');
-  //             opt.value = p.key;
-  //             opt.textContent = p.name;
-  //             s3.appendChild(opt);
-  //           }
-  //         });
-  //         s3.style.display = 'inline-block';
-  //       } else {
-  //         s3.style.display = 'none';
-  //       }
-  //     }
-  //   }
-    
-  //   if (level === 3 && s3) {
-  //     const v3 = s3.value || '';
-  //     saveFolderSelection(idx, 3, v3);
-  //   }
-  // }
-
   function onFolderChange(idx, level) {
-  const s1 = document.getElementById(`folder1-${idx}`);
-  const s2 = document.getElementById(`folder2-${idx}`);
-  const s3 = document.getElementById(`folder3-${idx}`);
-  if (!s1 || !s2 || !s3) return;
-
-  if (level === 1) {
-    // escolheu Produto → preenche Sub-Produto por parentId == ID do produto
-    const v1 = s1.value;
-    s2.innerHTML = `<option value="">Selecione...</option>`;
-    s3.innerHTML = `<option value="">Selecione...</option>`;
-    s2.style.display = 'none';
-    s3.style.display = 'none';
-
-    (pastasPrincipaisCache || []).forEach(p => {
-      if (p.parentId == Number(v1)) {
-        const opt = document.createElement('option');
-        opt.value = String(p.id);           // <<<<<<<<<<<<<< AQUI
-        opt.textContent = p.name || '';
-        s2.appendChild(opt);
+    const s1 = document.getElementById(`folder1-${idx}`);
+    const s2 = document.getElementById(`folder2-${idx}`);
+    const s3 = document.getElementById(`folder3-${idx}`);
+    
+    if (level === 1 && s1) {
+      const v1 = s1.value || '';
+      saveFolderSelection(idx, 1, v1);
+      if (s2) {
+        s2.innerHTML = '<option value="">Selecione...</option>';
+        if (v1) {
+          pastasPrincipaisCache.forEach(p => {
+            if (p.parentId == Number(v1)) {
+              const opt = document.createElement('option');
+              opt.value = p.key;
+              opt.textContent = p.name;
+              s2.appendChild(opt);
+            }
+          });
+          s2.style.display = 'inline-block';
+        } else {
+          s2.style.display = 'none';
+        }
       }
-    });
-    if (s2.options.length > 1) s2.style.display = 'inline-block';
-
-    saveFolderSelection(idx, { f1: Number(v1), f2: null, f3: null });
-  }
-
-  if (level === 2) {
-    // escolheu Sub-Produto → preenche Funcionalidade por parentId == ID do subproduto
-    const v2 = s2.value;
-    s3.innerHTML = `<option value="">Selecione...</option>`;
-    s3.style.display = 'none';
-
-    (pastasPrincipaisCache || []).forEach(p => {
-      if (p.parentId == Number(v2)) {
-        const opt = document.createElement('option');
-        opt.value = String(p.id);           // <<<<<<<<<<<<<< AQUI
-        opt.textContent = p.name || '';
-        s3.appendChild(opt);
+      if (s3) { s3.innerHTML = '<option value="">Selecione...</option>'; s3.style.display = 'none'; }
+    }
+    
+    if (level === 2 && s2) {
+      const v2 = s2.value || '';
+      saveFolderSelection(idx, 2, v2);
+      if (s3) {
+        s3.innerHTML = '<option value="">Selecione...</option>';
+        if (v2) {
+          pastasPrincipaisCache.forEach(p => {
+            if (p.parentId == Number(v2)) {
+              const opt = document.createElement('option');
+              opt.value = p.key;
+              opt.textContent = p.name;
+              s3.appendChild(opt);
+            }
+          });
+          s3.style.display = 'inline-block';
+        } else {
+          s3.style.display = 'none';
+        }
       }
-    });
-    if (s3.options.length > 1) s3.style.display = 'inline-block';
-
-    saveFolderSelection(idx, { f1: Number(s1.value || 0), f2: Number(v2), f3: null });
+    }
+    
+    if (level === 3 && s3) {
+      const v3 = s3.value || '';
+      saveFolderSelection(idx, 3, v3);
+    }
   }
-
-  if (level === 3) {
-    saveFolderSelection(idx, { f1: Number(s1.value || 0), f2: Number(s2.value || 0), f3: Number(s3.value || 0) });
-  }
-
-  // resolve folderId final (o mais específico que tiver)
-  let folderId = 0;
-  if (s3.value) folderId = Number(s3.value);
-  else if (s2.value) folderId = Number(s2.value);
-  else if (s1.value) folderId = Number(s1.value);
-
-  setFolderIdForIdx(idx, folderId); // sua função que guarda no state por sugestão
-}
-
   
   /* ===================== Estado de sugestões / checkboxes ====================== */
   function mostrarSugestoesIA() {
