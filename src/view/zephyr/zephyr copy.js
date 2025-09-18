@@ -39,59 +39,6 @@ const $filters = {
     clearBtn: document.getElementById(FILTER_IDS.clearBtn),
 };
 
-// opções padrão
-const META_OPTIONS = {
-  testClass: ['N/A', 'Positive', 'Negative'],
-  testType:  ['N/A', 'Acceptance', 'End To End', 'Regression', 'Sanity', 'Security', 'Performance', 'UI'],
-  testGroup: ['N/A', 'Backend', 'Desktop', 'Front-End'],
-};
-
-function makeSelect(id, values, selected) {
-  const sel = document.createElement('select');
-  sel.id = id;
-  values.forEach(v => {
-    const opt = document.createElement('option');
-    opt.value = v;
-    opt.textContent = v;
-    if ((selected || 'N/A') === v) opt.selected = true;
-    sel.appendChild(opt);
-  });
-  return sel;
-}
-
-function getMetaState() {
-  return (vscode.getState()?.metaByIdx) || {};
-}
-function setMetaState(metaByIdx) {
-  const st = vscode.getState() || {};
-  vscode.setState({ ...st, metaByIdx });
-}
-function updateMetaForIdx(idx, partial) {
-  const meta = getMetaState();
-  const prev = meta[idx] || {};
-  meta[idx] = { ...prev, ...partial };
-  setMetaState(meta);
-}
-
-function bindMetaSelects(idx) {
-  const $ = (id) => document.getElementById(id);
-
-  const sc = $(`metaTestClass-${idx}`);
-  const st = $(`metaTestType-${idx}`);
-  const sg = $(`metaTestGroup-${idx}`);
-
-  [sc, st, sg].forEach(el => {
-    if (!el) return;
-    el.addEventListener('change', () => {
-      updateMetaForIdx(idx, {
-        testClass: sc?.value || 'N/A',
-        testType:  st?.value || 'N/A',
-        testGroup: sg?.value || 'N/A',
-      });
-    });
-  });
-}
-
 // Helpers
 const NA = 'N/A';
 
@@ -603,166 +550,52 @@ function applyZephyrKeys() {
     vscode.postMessage({ type: 'enviarAtualizacaoParaZephyr', payload: selecionados });
   }
   
-  // function handleSubmit(event) {
-  //   event.preventDefault();
-  //   saveFormState();
-    
-  //   const featureName = document.getElementById('featureName').value.trim();
-  //   const ruleName = document.getElementById('ruleName').value.trim();
-  //   const fileBaseName = (document.getElementById('fileBaseName').value || issueKey || 'scenarios').trim();
-  //   const tribeName = document.getElementById('tribeName').value.trim();
-  //   const extraTags = document.getElementById('extraTags').value.trim();
-    
-  //   if (!caminhoPasta) { window.alert('Selecione uma pasta de destino.'); return; }
-    
-  //   const itens = [];
-  //   document.querySelectorAll('.checkbox-ia:checked').forEach((cb) => {
-  //     const idx = Number(cb.dataset.idx ?? (cb.id || '').replace('checkbox-',''));
-  //     if (Number.isNaN(idx)) return;
-  //     const map = getZephyrKeysState();
-  //     const preferredKey = map[idx] || cb.dataset.key || (sugestoesIA && sugestoesIA[idx] && sugestoesIA[idx].key) || `cenario-${idx + 1}`;
-  //     const raw = document.getElementById(`textarea-${idx}`)?.value || '';
-  //     const gherkin = extrairGherkin(raw) || raw;
-  //     const gherkinSanit = sanitizeScenarioTitle(gherkin, preferredKey);
-  //     if (gherkinSanit.trim()) itens.push({ key: preferredKey, gherkin: gherkinSanit, issueId, issueKey });
-  //   });
-    
-  //   if (itens.length === 0 && Array.isArray(testesZephyrRaw) && testesZephyrRaw.length > 0) {
-  //     testesZephyrRaw.forEach((t, zIdx) => {
-  //       const key = t?.key || `cenario-${zIdx + 1}`;
-  //       const zephyrName = (t?.details?.name || '').trim();
-  //       const gRaw = extrairGherkin(t?.script || '');
-  //       const gSan = sanitizeScenarioTitle(gRaw, key);
-  //       const finalText = ensureScenarioTitle(gSan, zephyrName);
-  //       if ((finalText || '').trim()) itens.push({ key, gherkin: finalText, issueId, issueKey });
-  //     });
-  //   }
-    
-  //   if (itens.length === 0) { window.alert('Marque ao menos um cenário para exportar.'); return; }
-    
-  //   vscode.postMessage({
-  //     type: 'criarScriptsEmPasta',
-  //     dados: {
-  //       caminho: caminhoPasta,
-  //       featureName, ruleName, fileBaseName, tribeName, extraTags,
-  //       itens,
-  //     },
-  //   });
-  // }
   function handleSubmit(event) {
-  event.preventDefault();
-  saveFormState();
-
-  const featureName  = document.getElementById('featureName').value.trim();
-  const ruleName     = document.getElementById('ruleName').value.trim();
-  const fileBaseName = (document.getElementById('fileBaseName').value || issueKey || 'scenarios').trim();
-  const tribeName    = document.getElementById('tribeName').value.trim();
-  const extraTags    = document.getElementById('extraTags').value.trim();
-
-  if (!caminhoPasta) { window.alert('Selecione uma pasta de destino.'); return; }
-
-  // estado de meta salvo pelos selects (se o usuário mexeu)
-  const metaMap = (typeof getMetaState === 'function') ? (getMetaState() || {}) : {};
-
-  // helper para obter meta por índice (select -> span -> 'N/A')
-  const getMetaForIdx = (idx) => {
-    const fromState = metaMap[idx] || {};
-    const testClass = fromState.testClass
-      || document.getElementById(`metaTestClass-${idx}`)?.value
-      || document.getElementById(`testClass-${idx}`)?.textContent?.trim()
-      || 'N/A';
-
-    const testType = fromState.testType
-      || document.getElementById(`metaTestType-${idx}`)?.value
-      || document.getElementById(`testType-${idx}`)?.textContent?.trim()
-      || 'N/A';
-
-    const testGroup = fromState.testGroup
-      || document.getElementById(`metaTestGroup-${idx}`)?.value
-      || document.getElementById(`testGroup-${idx}`)?.textContent?.trim()
-      || 'N/A';
-
-    return { testClass, testType, testGroup };
-  };
-
-  const itens = [];
-  // 1) Itens marcados nas sugestões (IA ou Manual)
-  document.querySelectorAll('.checkbox-ia:checked').forEach((cb) => {
-    const idx = Number(cb.dataset.idx ?? (cb.id || '').replace('checkbox-',''));
-    if (Number.isNaN(idx)) return;
-
-    const map = getZephyrKeysState();
-    const preferredKey = map[idx]
-      || cb.dataset.key
-      || (sugestoesIA && sugestoesIA[idx] && sugestoesIA[idx].key)
-      || `cenario-${idx + 1}`;
-
-    const raw = document.getElementById(`textarea-${idx}`)?.value || '';
-    const gherkin = extrairGherkin(raw) || raw;
-    const gherkinSanit = sanitizeScenarioTitle(gherkin, preferredKey);
-    if (!gherkinSanit.trim()) return;
-
-    const meta = getMetaForIdx(idx);
-
-    // (opcional) validar meta obrigatória
-    // if (meta.testClass === 'N/A' || meta.testType === 'N/A' || meta.testGroup === 'N/A') {
-    //   window.alert(`Defina Test Class/Type/Group para o cenário ${preferredKey}.`);
-    //   return;
-    // }
-
-    itens.push({
-      key: preferredKey,
-      gherkin: gherkinSanit,
-      issueId, issueKey,
-      testClass: meta.testClass,
-      testType:  meta.testType,
-      testGroup: meta.testGroup,
+    event.preventDefault();
+    saveFormState();
+    
+    const featureName = document.getElementById('featureName').value.trim();
+    const ruleName = document.getElementById('ruleName').value.trim();
+    const fileBaseName = (document.getElementById('fileBaseName').value || issueKey || 'scenarios').trim();
+    const tribeName = document.getElementById('tribeName').value.trim();
+    const extraTags = document.getElementById('extraTags').value.trim();
+    
+    if (!caminhoPasta) { window.alert('Selecione uma pasta de destino.'); return; }
+    
+    const itens = [];
+    document.querySelectorAll('.checkbox-ia:checked').forEach((cb) => {
+      const idx = Number(cb.dataset.idx ?? (cb.id || '').replace('checkbox-',''));
+      if (Number.isNaN(idx)) return;
+      const map = getZephyrKeysState();
+      const preferredKey = map[idx] || cb.dataset.key || (sugestoesIA && sugestoesIA[idx] && sugestoesIA[idx].key) || `cenario-${idx + 1}`;
+      const raw = document.getElementById(`textarea-${idx}`)?.value || '';
+      const gherkin = extrairGherkin(raw) || raw;
+      const gherkinSanit = sanitizeScenarioTitle(gherkin, preferredKey);
+      if (gherkinSanit.trim()) itens.push({ key: preferredKey, gherkin: gherkinSanit, issueId, issueKey });
     });
-  });
-
-  // 2) Fallback: se nada marcado, exporta a partir do Zephyr bruto
-  if (itens.length === 0 && Array.isArray(testesZephyrRaw) && testesZephyrRaw.length > 0) {
-    testesZephyrRaw.forEach((t, zIdx) => {
-      const key = t?.key || `cenario-${zIdx + 1}`;
-      const zephyrName = (t?.details?.name || '').trim();
-      const gRaw = extrairGherkin(t?.script || '');
-      const gSan = sanitizeScenarioTitle(gRaw, key);
-      const finalText = ensureScenarioTitle(gSan, zephyrName);
-      if (!(finalText || '').trim()) return;
-
-      // tenta meta do estado pelo mesmo índice (se existir); senão usa 'N/A'
-      const meta = (metaMap[zIdx]) || {
-        testClass: 'N/A',
-        testType:  'N/A',
-        testGroup: 'N/A',
-      };
-
-      itens.push({
-        key,
-        gherkin: finalText,
-        issueId, issueKey,
-        testClass: meta.testClass,
-        testType:  meta.testType,
-        testGroup: meta.testGroup,
+    
+    if (itens.length === 0 && Array.isArray(testesZephyrRaw) && testesZephyrRaw.length > 0) {
+      testesZephyrRaw.forEach((t, zIdx) => {
+        const key = t?.key || `cenario-${zIdx + 1}`;
+        const zephyrName = (t?.details?.name || '').trim();
+        const gRaw = extrairGherkin(t?.script || '');
+        const gSan = sanitizeScenarioTitle(gRaw, key);
+        const finalText = ensureScenarioTitle(gSan, zephyrName);
+        if ((finalText || '').trim()) itens.push({ key, gherkin: finalText, issueId, issueKey });
       });
+    }
+    
+    if (itens.length === 0) { window.alert('Marque ao menos um cenário para exportar.'); return; }
+    
+    vscode.postMessage({
+      type: 'criarScriptsEmPasta',
+      dados: {
+        caminho: caminhoPasta,
+        featureName, ruleName, fileBaseName, tribeName, extraTags,
+        itens,
+      },
     });
   }
-
-  if (itens.length === 0) {
-    window.alert('Marque ao menos um cenário para exportar.');
-    return;
-  }
-
-  vscode.postMessage({
-    type: 'criarScriptsEmPasta',
-    dados: {
-      caminho: caminhoPasta,
-      featureName, ruleName, fileBaseName, tribeName, extraTags,
-      itens,
-    },
-  });
-}
-
   
   /* ===================== Render ====================== */
   function renderDados(i) {
@@ -823,148 +656,51 @@ function applyZephyrKeys() {
     }
   }
   
-  // function renderizarSugestao(idx, conteudo, testType, testClass, testGroup, manual = false) {
-  //   const container = document.getElementById('issueTests');
-  //   const div = document.createElement('div');
-  //   div.className = 'sugestao';
-  //   div.id = 'sugestao-' + idx;
-  //   div.style ='border: 1px solid #444; padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem; background-color: #2a2a2a';
-  //   div.innerHTML = `
-  //     <h3 style="color: #4fc3f7; margin-bottom: 0.5rem;">
-  //       <span id="cenarioLabel-${idx}">📝 Cenário ${manual ? '(Manual)' : '(IA)'}:</span> ${extrairTitulosDosCenarios(conteudo)}
-  //     </h3>
-  //     <div style="background-color: #3c3c3c; padding: 0.8rem; border-radius: 6px; margin-bottom: 1rem;">
-  //       <p><strong>🤖 Automation Status: </strong><span id="automationStatus-${idx}">Not Automated</span></p>
-  //       <p><strong>🏷️ Test Class: </strong><span id="testClass-${idx}">${testClass}</span></p>
-  //       <p><strong>📦 Test Type: </strong><span id="testType-${idx}">${testType}</span></p>
-  //       <p><strong>🧪 Test Group: </strong><span id="testGroup-${idx}">${testGroup}</span></p>
-  //       <label>📁 Produto:</label>
-  //       <select id="folder1-${idx}"><option value="">Selecione...</option></select>
-  //       <label>📁 Sub-Produto:</label>
-  //       <select id="folder2-${idx}" style="display:none;"></select>
-  //       <label>📁 Funcionalidade:</label>
-  //       <select id="folder3-${idx}" style="display:none;"></select>
-  //     </div>
-  //     <textarea id="textarea-${idx}" oninput="salvarEstado()">${conteudo}</textarea>
-  //     <div class="checkbox-container">
-  //       <input type="checkbox" class="checkbox-ia" id="checkbox-${idx}" data-idx="${idx}" onchange="salvarEstado()" />
-  //       <label for="checkbox-${idx}">Aceitar este cenário</label>
-  //     </div>
-  //     <div id="erro-folder-${idx}" style="display: none; color: red; font-weight: bold; margin-top: 10px;"></div>
-  //     <hr style="margin: 1rem 0; border: 0; border-top: 1px solid #444;" />
-  //     <button class="btn-excluir" onclick="excluirCenario(${idx})">🗑️ Excluir</button>
-  //   `;
-  //   container.appendChild(div);
-    
-  //   // liga os eventos de cascata sem inline (CSP-safe)
-  //   const f1 = document.getElementById(`folder1-${idx}`);
-  //   const f2 = document.getElementById(`folder2-${idx}`);
-  //   const f3 = document.getElementById(`folder3-${idx}`);
-  //   f1?.addEventListener('change', () => onFolderChange(idx, 1));
-  //   f2?.addEventListener('change', () => onFolderChange(idx, 2));
-  //   f3?.addEventListener('change', () => onFolderChange(idx, 3));
-    
-  //   applyFolderSelectionsToDOM(idx);
-  //   loadFormState();
-  //   applyZephyrKeys();
-  // }
   function renderizarSugestao(idx, conteudo, testType, testClass, testGroup, manual = false) {
-  const needEditable =
-    manual ||
-    !testClass || testClass === 'N/A' ||
-    !testType  || testType  === 'N/A' ||
-    !testGroup || testGroup === 'N/A';
-
-  const container = document.getElementById('issueTests');
-  const div = document.createElement('div');
-  div.className = 'sugestao';
-  div.id = 'sugestao-' + idx;
-  div.style = 'border: 1px solid #444; padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem; background-color: #2a2a2a';
-
-  // Cabeçalho + bloco de meta
-  const headerHtml = `
-    <h3 style="color: #4fc3f7; margin-bottom: 0.5rem;">
-      <span id="cenarioLabel-${idx}">📝 Cenário ${manual ? '(Manual)' : '(IA)'}:</span> ${extrairTitulosDosCenarios(conteudo)}
-    </h3>
-    <div class="meta-box" style="background-color:#3c3c3c;padding:.8rem;border-radius:6px;margin-bottom:1rem;">
-      <p><strong>🤖 Automation Status: </strong><span id="automationStatus-${idx}">Not Automated</span></p>
-      ${
-        needEditable
-          ? `
-            <div class="meta-grid">
-              <label>🏷️ Test Class:</label>
-              <div id="wrapTestClass-${idx}"></div>
-              <label>📦 Test Type:</label>
-              <div id="wrapTestType-${idx}"></div>
-              <label>🧪 Test Group:</label>
-              <div id="wrapTestGroup-${idx}"></div>
-            </div>
-          `
-          : `
-            <p><strong>🏷️ Test Class: </strong><span id="testClass-${idx}">${testClass}</span></p>
-            <p><strong>📦 Test Type: </strong><span id="testType-${idx}">${testType}</span></p>
-            <p><strong>🧪 Test Group: </strong><span id="testGroup-${idx}">${testGroup}</span></p>
-          `
-      }
-      <label>📁 Produto:</label>
-      <select id="folder1-${idx}"><option value="">Selecione...</option></select>
-      <label>📁 Sub-Produto:</label>
-      <select id="folder2-${idx}" style="display:none;"></select>
-      <label>📁 Funcionalidade:</label>
-      <select id="folder3-${idx}" style="display:none;"></select>
-    </div>
-  `;
-
-  const bodyHtml = `
-    <textarea id="textarea-${idx}">${conteudo}</textarea>
-    <div class="checkbox-container">
-      <input type="checkbox" class="checkbox-ia" id="checkbox-${idx}" data-idx="${idx}" />
-      <label for="checkbox-${idx}">Aceitar este cenário</label>
-    </div>
-    <div id="erro-folder-${idx}" style="display:none;color:red;font-weight:bold;margin-top:10px;"></div>
-    <hr style="margin:1rem 0;border:0;border-top:1px solid #444;" />
-    <button class="btn-excluir" id="btnExcluir-${idx}">🗑️ Excluir</button>
-  `;
-
-  div.innerHTML = headerHtml + bodyHtml;
-  container.appendChild(div);
-
-  // === monta selects de meta (se necessário) ===
-  if (needEditable) {
-    // reidrata seleção anterior (se existir)
-    const prev = (getMetaState()[idx]) || { testClass: testClass || 'N/A', testType: testType || 'N/A', testGroup: testGroup || 'N/A' };
-    updateMetaForIdx(idx, prev);
-
-    const wrapC = document.getElementById(`wrapTestClass-${idx}`);
-    const wrapT = document.getElementById(`wrapTestType-${idx}`);
-    const wrapG = document.getElementById(`wrapTestGroup-${idx}`);
-
-    if (wrapC) wrapC.appendChild(makeSelect(`metaTestClass-${idx}`, META_OPTIONS.testClass, prev.testClass));
-    if (wrapT) wrapT.appendChild(makeSelect(`metaTestType-${idx}`,  META_OPTIONS.testType,  prev.testType));
-    if (wrapG) wrapG.appendChild(makeSelect(`metaTestGroup-${idx}`, META_OPTIONS.testGroup, prev.testGroup));
-
-    bindMetaSelects(idx);
+    const container = document.getElementById('issueTests');
+    const div = document.createElement('div');
+    div.className = 'sugestao';
+    div.id = 'sugestao-' + idx;
+    div.style ='border: 1px solid #444; padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem; background-color: #2a2a2a';
+    div.innerHTML = `
+      <h3 style="color: #4fc3f7; margin-bottom: 0.5rem;">
+        <span id="cenarioLabel-${idx}">📝 Cenário ${manual ? '(Manual)' : '(IA)'}:</span> ${extrairTitulosDosCenarios(conteudo)}
+      </h3>
+      <div style="background-color: #3c3c3c; padding: 0.8rem; border-radius: 6px; margin-bottom: 1rem;">
+        <p><strong>🤖 Automation Status: </strong><span id="automationStatus-${idx}">Not Automated</span></p>
+        <p><strong>🏷️ Test Class: </strong><span id="testClass-${idx}">${testClass}</span></p>
+        <p><strong>📦 Test Type: </strong><span id="testType-${idx}">${testType}</span></p>
+        <p><strong>🧪 Test Group: </strong><span id="testGroup-${idx}">${testGroup}</span></p>
+        <label>📁 Produto:</label>
+        <select id="folder1-${idx}"><option value="">Selecione...</option></select>
+        <label>📁 Sub-Produto:</label>
+        <select id="folder2-${idx}" style="display:none;"></select>
+        <label>📁 Funcionalidade:</label>
+        <select id="folder3-${idx}" style="display:none;"></select>
+      </div>
+      <textarea id="textarea-${idx}" oninput="salvarEstado()">${conteudo}</textarea>
+      <div class="checkbox-container">
+        <input type="checkbox" class="checkbox-ia" id="checkbox-${idx}" data-idx="${idx}" onchange="salvarEstado()" />
+        <label for="checkbox-${idx}">Aceitar este cenário</label>
+      </div>
+      <div id="erro-folder-${idx}" style="display: none; color: red; font-weight: bold; margin-top: 10px;"></div>
+      <hr style="margin: 1rem 0; border: 0; border-top: 1px solid #444;" />
+      <button class="btn-excluir" onclick="excluirCenario(${idx})">🗑️ Excluir</button>
+    `;
+    container.appendChild(div);
+    
+    // liga os eventos de cascata sem inline (CSP-safe)
+    const f1 = document.getElementById(`folder1-${idx}`);
+    const f2 = document.getElementById(`folder2-${idx}`);
+    const f3 = document.getElementById(`folder3-${idx}`);
+    f1?.addEventListener('change', () => onFolderChange(idx, 1));
+    f2?.addEventListener('change', () => onFolderChange(idx, 2));
+    f3?.addEventListener('change', () => onFolderChange(idx, 3));
+    
+    applyFolderSelectionsToDOM(idx);
+    loadFormState();
+    applyZephyrKeys();
   }
-
-  // === liga eventos dos folders (CSP-safe) ===
-  const f1 = document.getElementById(`folder1-${idx}`);
-  const f2 = document.getElementById(`folder2-${idx}`);
-  const f3 = document.getElementById(`folder3-${idx}`);
-  f1?.addEventListener('change', () => onFolderChange(idx, 1));
-  f2?.addEventListener('change', () => onFolderChange(idx, 2));
-  f3?.addEventListener('change', () => onFolderChange(idx, 3));
-
-  // === demais binds ===
-  document.getElementById(`checkbox-${idx}`)?.addEventListener('change', salvarEstado);
-  document.getElementById(`textarea-${idx}`)?.addEventListener('input', salvarEstado);
-  document.getElementById(`btnExcluir-${idx}`)?.addEventListener('click', () => excluirCenario(idx));
-
-  // popula árvore de pastas e reidrata
-  applyFolderSelectionsToDOM(idx);
-  loadFormState();
-  applyZephyrKeys();
-}
-
   
   /* ======= Handlers dos selects (salvam estado e populam cascata) ======= */
   function onFolderChange(idx, level) {

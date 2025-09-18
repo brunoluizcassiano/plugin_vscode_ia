@@ -80,14 +80,58 @@
     font-style: italic;
   }
 
-  /* Limita apenas os selects da cascata dentro de cada sugestão */
+  /* ====== Cartão de cenário ====== */
+.sugestao .meta-box {
+  background: #3c3c3c;
+  padding: .8rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+/* grade compacta: label à esquerda, campo à direita */
+.sugestao .meta-grid {
+  display: grid;
+  grid-template-columns: 90px 1fr; /* ajuste: largura da coluna de label */
+  gap: 6px 12px;                    /* linha x coluna */
+  align-items: center;
+}
+
+/* normaliza tipografia dos pares label/valor */
+.sugestao .meta-grid label,
+.sugestao .meta-grid p {
+  margin: 0;
+  line-height: 1.2;
+  font-size: 13px;
+}
+
+/* selects (meta + cascata) só dentro do card */
+.sugestao .meta-grid select,
 .sugestao select[id^="folder1-"],
 .sugestao select[id^="folder2-"],
 .sugestao select[id^="folder3-"] {
-  width: 120px;        /* ajuste fino aqui */
+  width: 120px;       /* ajuste fino aqui */
   max-width: 100%;
+  height: 28px;
+  padding: 2px 8px;
+  font-size: 13px;    /* deixa o texto menor */
+  line-height: 1.2;
+  margin: 0;          /* remove espaços verticais extras */
   display: inline-block;
-  margin-right: .4rem;
+  vertical-align: middle;
+  white-space: nowrap; /* evita quebra estranha no texto das opções */
+}
+
+/* quando o sub/select está oculto, não “empurra” layout */
+.sugestao select[id^="folder2-"][style*="display:none"],
+.sugestao select[id^="folder3-"][style*="display:none"] {
+  width: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* deixa os títulos dos blocos em linha sem abrir parágrafo grande */
+.sugestao .meta-line {
+  display: contents; /* permite <strong> + <span> na mesma linha da grid */
 }
 
 /* Opcional: quando escondidos (JS usa display none/inline-block), manter layout ok */
