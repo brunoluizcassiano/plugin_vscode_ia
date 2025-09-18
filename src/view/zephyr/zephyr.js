@@ -320,11 +320,13 @@ function loadFormState() {
 /* -------- Zephyr Keys state (persistido) -------- */
 function getZephyrKeysState() { return getAppState().zephyrKeys || {}; }
 function setZephyrKeysState(map) { setAppState({ zephyrKeys: map }); }
+
 function upsertZephyrKey(idx, zephyrKey) {
   const map = { ...getZephyrKeysState(), [idx]: zephyrKey };
   setZephyrKeysState(map);
   applyZephyrKeys();
 }
+
 function applyZephyrKeys() {
   const map = getZephyrKeysState();
   Object.keys(map).forEach(i => {
@@ -332,9 +334,11 @@ function applyZephyrKeys() {
     if (el) el.innerHTML = `📝 Cenário (IA): ${map[i]}`;
   });
 }
+
 /* -------- Pastas / Seleções por cenário (persistido) -------- */
 function getFolderSelections() { return getAppState().folderSelections || {}; }
 function setFolderSelections(map) { setAppState({ folderSelections: map }); }
+
 function saveFolderSelection(idx, level, value) {
   const map = { ...getFolderSelections() };
   const cur = map[idx] || { f1: '', f2: '', f3: '' };
@@ -344,6 +348,7 @@ function saveFolderSelection(idx, level, value) {
   map[idx] = cur;
   setFolderSelections(map);
 }
+
 function applyFolderSelectionsToDOM(idx) {
   const selMap = getFolderSelections();
   const sel = selMap[idx] || {};
@@ -397,58 +402,13 @@ function applyFolderSelectionsToDOM(idx) {
     }
   }
 }
+
 function rehydrateAllFolderSelections() {
   const selMap = getFolderSelections();
   Object.keys(selMap).forEach(i => applyFolderSelectionsToDOM(Number(i)));
 }
+
 /* ===================== Util Gherkin ====================== */
-// function extrairGherkin(texto) {
-//   if (!texto || typeof texto !== "string") return "";
-//   const regex = /\\`\\`\\`gherkin\\s*([\\s\\S]*?)\\`\\`\\`/i;
-//   const match = texto.match(regex);
-//   let conteudo = match ? match[1] : texto;
-//   const linhas = conteudo.split('\\n').map(l => l.replace(/^\\s+/, '')).filter(l => l.trim() !== '');
-//   return linhas.join('\\n');
-// }
-
-// function extrairGherkin(texto) {
-//   if (typeof texto !== 'string' || !texto.trim()) return '';
-
-//   // normaliza quebras de linha
-//   const t = texto.replace(/\r\n?/g, '\n');
-
-//   // 1) Preferir bloco cercado por ```gherkin ... ```
-//   const cercado = t.match(/```(?:gherkin)?\s*([\s\S]*?)```/i);
-//   if (cercado && cercado[1]) {
-//     return cercado[1].trim();
-//   }
-
-//   // 2) Fallback: pegar "Scenario" (ou "Cenário") + passos subsequentes
-//   const linhas = t.split('\n');
-
-//   const ehCabecalhoCenario = (l) =>
-//     /^\s*(?:Scenario(?:\s+Outline)?|Cenário(?:\s+Esquema)?)\s*:?/i.test(l);
-
-//   const ehPasso = (l) =>
-//     /^\s*(?:Given|When|Then|And|But|Dado|Quando|Então|E|Mas)\b/i.test(l);
-
-//   const start = linhas.findIndex(ehCabecalhoCenario);
-//   if (start === -1) {
-//     // fallback extremo: devolve texto limpo (evita retornar Markdown/explicações com lixo)
-//     return t.trim();
-//   }
-
-//   const out = [linhas[start]];
-//   for (let i = start + 1; i < linhas.length; i++) {
-//     const ln = linhas[i];
-//     if (!ln.trim()) { out.push(ln); continue; }     // mantém linhas em branco dentro do bloco
-//     if (ehPasso(ln)) { out.push(ln); continue; }    // agrega passos
-//     break;                                          // encontrou algo que não é passo → encerra
-//   }
-
-//   return out.join('\n').trim();
-// }
-
 function extrairGherkin(texto) {
   if (typeof texto !== 'string' || !texto.trim()) return '';
 
@@ -484,6 +444,7 @@ function extrairScenarioGherkin(texto) {
   const linhas = conteudo.split('\\n').map(l => l.replace(/^\\s+/, '')).filter(l => l.trim() !== '');
   return linhas.join('\\n');
 }
+
 function extrairTitulosDosCenarios(texto) {
   if (typeof texto !== 'string' || !texto.trim()) return '';
   // normaliza quebras para \n
@@ -494,6 +455,7 @@ function extrairTitulosDosCenarios(texto) {
   );
   return m ? m[1].trim() : '';
 }
+
 /* ===== Remover KEY-1234: do título do cenário ===== */
 function sanitizeScenarioTitle(gherkin, keyHint) {
   if (!gherkin) return '';
@@ -509,6 +471,7 @@ function sanitizeScenarioTitle(gherkin, keyHint) {
   });
   return lines.join('\\n');
 }
+
 /* ===== Garante que haverá "Scenario: <nome>" (insere ou substitui) ===== */
 function ensureScenarioTitle(gherkin, scenarioName) {
   const clean = (gherkin || '').trim();
@@ -521,90 +484,54 @@ function ensureScenarioTitle(gherkin, scenarioName) {
   }
   return clean.replace(/^\\s*Scenario\\s*:\\s*.*$/im, 'Scenario: ' + name);
 }
+
 /* ===================== Fluxo UI ====================== */
 function mostrarLoading() {
   document.getElementById('loading').style.display = 'block';
   document.querySelector('.container').style.display = 'none';
 }
+
 function esconderLoading() {
   document.getElementById('loading').style.display = 'none';
   document.querySelector('.container').style.display = 'block';
 }
+
 function tentarExibirConteudo() {
   if (nomeRecebido && testesRecebido) esconderLoading();
 }
+
 function analisarIA() {
   document.getElementById('iaLoading').style.display = 'block';
   vscode.postMessage({ type: 'analisarIA', testes: testesZephyrRaw });
 }
+
 function selecionarTodos() {
   document.querySelectorAll('.checkbox-ia').forEach(c => c.checked = true);
   salvarEstado();
 }
+
 function adicionarCenario() {
   const idx = sugestoesIA.length;
   sugestoesIA.push({ key: "Manual_" + idx, suggestion: "" });
   renderizarSugestao(idx, "", "", "", "", true);
   salvarEstado();
 }
+
 function excluirCenario(idx) {
   sugestoesIA.splice(idx, 1);
   document.getElementById('sugestao-' + idx)?.remove();
   salvarEstado();
 }
+
 function enviarCriarScripts() {
   const form = document.getElementById('formulario');
   form.style.display = 'block';
   form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   saveFormState({ formVisible: true });
 }
+
 function selecionarPasta() { vscode.postMessage({ type: 'selecionarPastaDestino' }); }
-/* ========= AJUSTE CRÍTICO AQUI ========= */
-// function enviarCriacaoCenariosIA() {
-//   const selecionados = [];
-//   document.querySelectorAll('.checkbox-ia:checked').forEach((cb) => {
-//     const idx = Number(cb.dataset.idx ?? (cb.id || '').replace('checkbox-', ''));
-//     if (Number.isNaN(idx)) return;
-//     const automationStatusEl = document.getElementById('automationStatus-' + idx);
-//     const testClassEl = document.getElementById('testClass-' + idx);
-//     const testTypeEl = document.getElementById('testType-' + idx);
-//     const testGroupEl = document.getElementById('testGroup-' + idx);
-//     const textareaEl = document.getElementById('textarea-' + idx);
-//     const automationStatus = automationStatusEl?.textContent?.trim().replace(/\\s+/g, ' ') || '';
-//     const testClass = testClassEl?.textContent?.trim().replace(/\\s+/g, ' ') || '';
-//     const testType = testTypeEl?.textContent?.trim().replace(/\\s+/g, ' ') || '';
-//     const testGroup = testGroupEl?.textContent?.trim().replace(/\\s+/g, ' ') || '';
-//     const raw = textareaEl?.value || '';
-//     let folderId = 0;
-//     const erroDiv = document.getElementById(`erro-folder-${idx}`);
-//     const f3 = document.getElementById(`folder3-${idx}`);
-//     const f2 = document.getElementById(`folder2-${idx}`);
-//     const f1 = document.getElementById(`folder1-${idx}`);
-//     if (f3 && f3.value) folderId = Number(f3.value);
-//     else if (f2 && f2.value) folderId = Number(f2.value);
-//     else if (f1 && f1.value) folderId = Number(f1.value);
-//     else {
-//       if (erroDiv) {
-//         erroDiv.innerText = '⚠️ Você precisa selecionar ao menos uma pasta.';
-//         erroDiv.style.display = 'block';
-//       }
-//       return;
-//     }
-//     if (erroDiv) erroDiv.style.display = 'none';
-//     const map = getZephyrKeysState();
-//     const zephKeyFromMap = map[idx];
-//     const key = zephKeyFromMap || sugestoesIA[idx]?.key || 'Sem key';
-//     const textoSanit = sanitizeScenarioTitle(raw, key);
-//     selecionados.push({
-//       key,
-//       texto: textoSanit,
-//       issueId,
-//       issueKey,
-//       automationStatus, testClass, testType, testGroup, folderId
-//     });
-//   });
-//   vscode.postMessage({ type: 'enviarParaZephyr', payload: selecionados });
-// }
+
 function enviarCriacaoCenariosIA() {
   const selecionados = [];
   document.querySelectorAll('.checkbox-ia:checked').forEach((cb) => {
@@ -630,7 +557,7 @@ function enviarCriacaoCenariosIA() {
     if (erroDiv) erroDiv.style.display = 'none';
     selecionados.push({
       key: preferredKey,
-      texto: textoSanit,     // o panel espera 'texto'
+      texto: textoSanit,
       issueId,
       issueKey,
       automationStatus,
@@ -646,6 +573,7 @@ function enviarCriacaoCenariosIA() {
   }
   vscode.postMessage({ type: 'enviarParaZephyr', payload: selecionados });
  }
+
 function enviarAtualizacao() {
   const selecionados = [];
   document.querySelectorAll('.checkbox-ia:checked').forEach((cb) => {
@@ -658,8 +586,7 @@ function enviarAtualizacao() {
   });
   vscode.postMessage({ type: 'enviarAtualizacaoParaZephyr', payload: selecionados });
 }
-// Lê meta do card: se manual pega dos <select>, senão dos <span> (IA).
-// Sempre devolve string válida (fallback 'N/A' e 'Not Automated').
+
 function getMetaForIdx(idx) {
  const byId = (id) => document.getElementById(id);
  const read = (el) => (el?.value ?? el?.textContent ?? '').trim();
@@ -679,6 +606,7 @@ function getMetaForIdx(idx) {
    testGroup:  read(byId(`testGroup-${idx}`))  || 'N/A',
  };
 }
+
 // Resolve a pasta selecionada (nível mais específico)
 function resolveFolderId(idx) {
   const f3 = document.getElementById(`folder3-${idx}`);
@@ -689,153 +617,7 @@ function resolveFolderId(idx) {
   if (f1 && f1.value) return Number(f1.value);
   return 0;
  }
-// function handleSubmit(event) {
-//   event.preventDefault();
-//   saveFormState();
-//   const featureName = document.getElementById('featureName').value.trim();
-//   const ruleName = document.getElementById('ruleName').value.trim();
-//   const fileBaseName = (document.getElementById('fileBaseName').value || issueKey || 'scenarios').trim();
-//   const tribeName = document.getElementById('tribeName').value.trim();
-//   const extraTags = document.getElementById('extraTags').value.trim();
-//   if (!caminhoPasta) { window.alert('Selecione uma pasta de destino.'); return; }
-//   const itens = [];
-//   document.querySelectorAll('.checkbox-ia:checked').forEach((cb) => {
-//     const idx = Number(cb.dataset.idx ?? (cb.id || '').replace('checkbox-',''));
-//     if (Number.isNaN(idx)) return;
-//     const map = getZephyrKeysState();
-//     const preferredKey = map[idx] || cb.dataset.key || (sugestoesIA && sugestoesIA[idx] && sugestoesIA[idx].key) || `cenario-${idx + 1}`;
-//     const raw = document.getElementById(`textarea-${idx}`)?.value || '';
-//     const gherkin = extrairGherkin(raw) || raw;
-//     const gherkinSanit = sanitizeScenarioTitle(gherkin, preferredKey);
-//     if (gherkinSanit.trim()) itens.push({ key: preferredKey, gherkin: gherkinSanit, issueId, issueKey });
-//   });
-//   if (itens.length === 0 && Array.isArray(testesZephyrRaw) && testesZephyrRaw.length > 0) {
-//     testesZephyrRaw.forEach((t, zIdx) => {
-//       const key = t?.key || `cenario-${zIdx + 1}`;
-//       const zephyrName = (t?.details?.name || '').trim();
-//       const gRaw = extrairGherkin(t?.script || '');
-//       const gSan = sanitizeScenarioTitle(gRaw, key);
-//       const finalText = ensureScenarioTitle(gSan, zephyrName);
-//       if ((finalText || '').trim()) itens.push({ key, gherkin: finalText, issueId, issueKey });
-//     });
-//   }
-//   if (itens.length === 0) { window.alert('Marque ao menos um cenário para exportar.'); return; }
-//   vscode.postMessage({
-//     type: 'criarScriptsEmPasta',
-//     dados: {
-//       caminho: caminhoPasta,
-//       featureName, ruleName, fileBaseName, tribeName, extraTags,
-//       itens,
-//     },
-//   });
-// }
-// function handleSubmit(event) {
-//   event.preventDefault();
-//   saveFormState();
-//   const featureName = document.getElementById('featureName').value.trim();
-//   const ruleName = document.getElementById('ruleName').value.trim();
-//   const fileBaseName = (document.getElementById('fileBaseName').value || issueKey || 'scenarios').trim();
-//   const tribeName = document.getElementById('tribeName').value.trim();
-//   const extraTags = document.getElementById('extraTags').value.trim();
-//   if (!caminhoPasta) { window.alert('Selecione uma pasta de destino.'); return; }
-//   // estado de meta salvo pelos selects (se o usuário mexeu)
-//   const metaMap = (typeof getMetaState === 'function') ? (getMetaState() || {}) : {};
-//   // helper para obter meta por índice (select -> span -> 'N/A')
-//   const getMetaForIdx = (idx) => {
-//     // const fromState = metaMap[idx] || {};
-//     // const testClass = fromState.testClass
-//     //   || document.getElementById(`metaTestClass-${idx}`)?.value
-//     //   || document.getElementById(`testClass-${idx}`)?.textContent?.trim()
-//     //   || 'N/A';
-//     // const testType = fromState.testType
-//     //   || document.getElementById(`metaTestType-${idx}`)?.value
-//     //   || document.getElementById(`testType-${idx}`)?.textContent?.trim()
-//     //   || 'N/A';
-//     // const testGroup = fromState.testGroup
-//     //   || document.getElementById(`metaTestGroup-${idx}`)?.value
-//     //   || document.getElementById(`testGroup-${idx}`)?.textContent?.trim()
-//     //   || 'N/A';
-//     // return { testClass, testType, testGroup };
-//     const sel = (id) => document.getElementById(id);
-//     const val = (el) => (el?.value ?? el?.textContent ?? '').trim();
-//     const testClass =
-//       val(sel(`metaTestClass-${idx}`)) || val(sel(`testClass-${idx}`)) || 'N/A';
-//     const testType =
-//       val(sel(`metaTestType-${idx}`)) || val(sel(`testType-${idx}`)) || 'N/A';
-//     const testGroup =
-//       val(sel(`metaTestGroup-${idx}`)) || val(sel(`testGroup-${idx}`)) || 'N/A';
-//     // opcional: se você quiser enviar também o status
-//     const automationStatus =
-//       val(sel(`automationStatus-${idx}`)) || 'Not Automated';
-//     return { testClass, testType, testGroup, automationStatus };
-//   };
-//   const itens = [];
-//   // 1) Itens marcados nas sugestões (IA ou Manual)
-//   document.querySelectorAll('.checkbox-ia:checked').forEach((cb) => {
-//     const idx = Number(cb.dataset.idx ?? (cb.id || '').replace('checkbox-', ''));
-//     if (Number.isNaN(idx)) return;
-//     const map = getZephyrKeysState();
-//     const preferredKey = map[idx]
-//       || cb.dataset.key
-//       || (sugestoesIA && sugestoesIA[idx] && sugestoesIA[idx].key)
-//       || `cenario-${idx + 1}`;
-//     const raw = document.getElementById(`textarea-${idx}`)?.value || '';
-//     const gherkin = extrairGherkin(raw) || raw;
-//     const gherkinSanit = sanitizeScenarioTitle(gherkin, preferredKey);
-//     if (!gherkinSanit.trim()) return;
-//     const meta = getMetaForIdx(idx);
-//     // (opcional) validar meta obrigatória
-//     // if (meta.testClass === 'N/A' || meta.testType === 'N/A' || meta.testGroup === 'N/A') {
-//     //   window.alert(`Defina Test Class/Type/Group para o cenário ${preferredKey}.`);
-//     //   return;
-//     // }
-//     itens.push({
-//       key: preferredKey,
-//       gherkin: gherkinSanit,
-//       issueId, issueKey,
-//       testClass: meta.testClass,
-//       testType: meta.testType,
-//       testGroup: meta.testGroup,
-//     });
-//   });
-//   // 2) Fallback: se nada marcado, exporta a partir do Zephyr bruto
-//   if (itens.length === 0 && Array.isArray(testesZephyrRaw) && testesZephyrRaw.length > 0) {
-//     testesZephyrRaw.forEach((t, zIdx) => {
-//       const key = t?.key || `cenario-${zIdx + 1}`;
-//       const zephyrName = (t?.details?.name || '').trim();
-//       const gRaw = extrairGherkin(t?.script || '');
-//       const gSan = sanitizeScenarioTitle(gRaw, key);
-//       const finalText = ensureScenarioTitle(gSan, zephyrName);
-//       if (!(finalText || '').trim()) return;
-//       // tenta meta do estado pelo mesmo índice (se existir); senão usa 'N/A'
-//       const meta = (metaMap[zIdx]) || {
-//         testClass: 'N/A',
-//         testType: 'N/A',
-//         testGroup: 'N/A',
-//       };
-//       itens.push({
-//         key,
-//         gherkin: finalText,
-//         issueId, issueKey,
-//         testClass: meta.testClass,
-//         testType: meta.testType,
-//         testGroup: meta.testGroup,
-//       });
-//     });
-//   }
-//   if (itens.length === 0) {
-//     window.alert('Marque ao menos um cenário para exportar.');
-//     return;
-//   }
-//   vscode.postMessage({
-//     type: 'criarScriptsEmPasta',
-//     dados: {
-//       caminho: caminhoPasta,
-//       featureName, ruleName, fileBaseName, tribeName, extraTags,
-//       itens,
-//     },
-//   });
-// }
+
 function handleSubmit(event) {
   event.preventDefault();
   saveFormState();
@@ -906,6 +688,7 @@ function handleSubmit(event) {
     },
   });
 }
+
 /* ===================== Render ====================== */
 function renderDados(i) {
   const container = document.querySelector('.container');
@@ -961,49 +744,7 @@ function renderDados(i) {
     if (btn) btn.style.display = 'inline-block';
   }
 }
-// function renderizarSugestao(idx, conteudo, testType, testClass, testGroup, manual = false) {
-//   const container = document.getElementById('issueTests');
-//   const div = document.createElement('div');
-//   div.className = 'sugestao';
-//   div.id = 'sugestao-' + idx;
-//   div.style ='border: 1px solid #444; padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem; background-color: #2a2a2a';
-//   div.innerHTML = `
-//     <h3 style="color: #4fc3f7; margin-bottom: 0.5rem;">
-//       <span id="cenarioLabel-${idx}">📝 Cenário ${manual ? '(Manual)' : '(IA)'}:</span> ${extrairTitulosDosCenarios(conteudo)}
-//     </h3>
-//     <div style="background-color: #3c3c3c; padding: 0.8rem; border-radius: 6px; margin-bottom: 1rem;">
-//       <p><strong>🤖 Automation Status: </strong><span id="automationStatus-${idx}">Not Automated</span></p>
-//       <p><strong>🏷️ Test Class: </strong><span id="testClass-${idx}">${testClass}</span></p>
-//       <p><strong>📦 Test Type: </strong><span id="testType-${idx}">${testType}</span></p>
-//       <p><strong>🧪 Test Group: </strong><span id="testGroup-${idx}">${testGroup}</span></p>
-//       <label>📁 Produto:</label>
-//       <select id="folder1-${idx}"><option value="">Selecione...</option></select>
-//       <label>📁 Sub-Produto:</label>
-//       <select id="folder2-${idx}" style="display:none;"></select>
-//       <label>📁 Funcionalidade:</label>
-//       <select id="folder3-${idx}" style="display:none;"></select>
-//     </div>
-//     <textarea id="textarea-${idx}" oninput="salvarEstado()">${conteudo}</textarea>
-//     <div class="checkbox-container">
-//       <input type="checkbox" class="checkbox-ia" id="checkbox-${idx}" data-idx="${idx}" onchange="salvarEstado()" />
-//       <label for="checkbox-${idx}">Aceitar este cenário</label>
-//     </div>
-//     <div id="erro-folder-${idx}" style="display: none; color: red; font-weight: bold; margin-top: 10px;"></div>
-//     <hr style="margin: 1rem 0; border: 0; border-top: 1px solid #444;" />
-//     <button class="btn-excluir" onclick="excluirCenario(${idx})">🗑️ Excluir</button>
-//   `;
-//   container.appendChild(div);
-//   // liga os eventos de cascata sem inline (CSP-safe)
-//   const f1 = document.getElementById(`folder1-${idx}`);
-//   const f2 = document.getElementById(`folder2-${idx}`);
-//   const f3 = document.getElementById(`folder3-${idx}`);
-//   f1?.addEventListener('change', () => onFolderChange(idx, 1));
-//   f2?.addEventListener('change', () => onFolderChange(idx, 2));
-//   f3?.addEventListener('change', () => onFolderChange(idx, 3));
-//   applyFolderSelectionsToDOM(idx);
-//   loadFormState();
-//   applyZephyrKeys();
-// }
+
 function renderizarSugestao(idx, conteudo, testType, testClass, testGroup, manual = false) {
   const needEditable =
     manual ||
@@ -1090,6 +831,7 @@ function renderizarSugestao(idx, conteudo, testType, testClass, testGroup, manua
     if (wrapG) wrapG.appendChild(makeSelect(`metaTestGroup-${idx}`, META_OPTIONS.testGroup, prev.testGroup));
     bindMetaSelects(idx);
   }
+
   // === liga eventos dos folders (CSP-safe) ===
   const f1 = document.getElementById(`folder1-${idx}`);
   const f2 = document.getElementById(`folder2-${idx}`);
@@ -1106,6 +848,7 @@ function renderizarSugestao(idx, conteudo, testType, testClass, testGroup, manua
   loadFormState();
   applyZephyrKeys();
 }
+
 /* ======= Handlers dos selects (salvam estado e populam cascata) ======= */
 function onFolderChange(idx, level) {
   const s1 = document.getElementById(`folder1-${idx}`);
@@ -1157,6 +900,7 @@ function onFolderChange(idx, level) {
     saveFolderSelection(idx, 3, v3);
   }
 }
+
 /* ===================== Estado de sugestões / checkboxes ====================== */
 function mostrarSugestoesIA() {
   if (!Array.isArray(sugestoesIA) || sugestoesIA.length === 0) return;
@@ -1190,6 +934,7 @@ function mostrarSugestoesIA() {
   applyZephyrKeys();
   rehydrateAllFolderSelections();
 }
+
 function salvarEstado() {
   const textarea = {};
   const checkbox = {};
@@ -1200,6 +945,7 @@ function salvarEstado() {
   const stateAtual = vscode.getState();
   vscode.setState({ ...stateAtual, textarea, checkbox });
 }
+
 /* ===================== Boot ====================== */
 const state = vscode.getState() || {};
 // Reidrata dados gerais (se existirem)
@@ -1262,8 +1008,7 @@ if (hasIssue) {
   if (state.filtros) applyFiltersToUI(state.filtros);
   bindFilterListeners();
 }
-// ❌ Remova/Comente a linha abaixo se existir, pois não há handler no painel
-// vscode.postMessage({ type: 'carregarNome' });
+
 /* ===================== Mensagens do host ====================== */
 window.addEventListener('message', event => {
   const message = event.data;
