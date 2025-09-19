@@ -464,7 +464,7 @@ export async function activate(context: vscode.ExtensionContext) {
           out.push({
             key,
             version: t.version ?? details?.version ?? 1,
-            details, // mantém name e customFields como sua webview usa
+            details,
             script
           });
         }
@@ -569,6 +569,7 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     })
   );
+
   // 🔍 Análise Story, Epic e Func com IA QA (Copilot)
   vscode.commands.registerCommand('plugin-vscode.analiseIaQa', async (description: string, bdd: string) => {
     const { copilotCookie } = getCopilotSettings();
@@ -589,6 +590,7 @@ export async function activate(context: vscode.ExtensionContext) {
       return '❌ Erro ao obter resposta da IA.';
     }
   });
+
   // 🔍 Análise cenarios com IA QA (Copilot)
   vscode.commands.registerCommand('plugin-vscode.analiseCenariosIaQa', async (userStory: string, cenario: string) => {
     const { copilotCookie } = getCopilotSettings();
@@ -609,6 +611,7 @@ export async function activate(context: vscode.ExtensionContext) {
       return '❌ Erro ao obter resposta da IA.';
     }
   });
+
   // 🔍 Criar cenarios com IA QA (Copilot)
   vscode.commands.registerCommand('plugin-vscode.criarCenariosIaQa', async (userStory: string, cenario: string) => {
     const { copilotCookie } = getCopilotSettings();
@@ -629,6 +632,7 @@ export async function activate(context: vscode.ExtensionContext) {
       return '❌ Erro ao obter resposta da IA.';
     }
   });
+
   // ✅ Novo comando: Criar test case no Zephyr
   context.subscriptions.push(
     vscode.commands.registerCommand('plugin-vscode.criarTesteZephyr', async (
@@ -723,6 +727,7 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     })
   );
+
   // ✅ Novo comando: Criar test case no Zephyr
   vscode.commands.registerCommand('plugin-vscode.atualizarTesteZephyr', async (
     key: string,
@@ -734,6 +739,7 @@ export async function activate(context: vscode.ExtensionContext) {
     console.log('🔍 issueId: ', issueId);
     console.log('🔍 titulo do teste: ', texto.split('\n')[0].replace(/^Scenario:/i, '').trim());
     console.log('🔍 projectKey: ', issueKey);
+
     // Buscar testes vinculados no Zephyr
     let zephyrData: any = { values: [] };
     let zephyrScriptData: any = { values: [] };
@@ -758,6 +764,7 @@ export async function activate(context: vscode.ExtensionContext) {
       console.warn('Erro ao buscar testes no Zephyr:', zephyrErr.message);
     }
   });
+
   // Comando para obter a lista de pastas
   vscode.commands.registerCommand('plugin-vscode.getZephyrFolders', async (issueKey: string) => {
     const { zephyrOwnerId, zephyrToken, zephyrDomain } = getZephyrSettings();
@@ -796,6 +803,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }
   });
 }
+
 async function criarTokenECriarThread(cookie: string): Promise<{ token: string; threadId: string }> {
   // Criar token
   const tokenRes = await fetch(`https://github.com/github-copilot/chat/token`, {
@@ -834,6 +842,7 @@ async function criarTokenECriarThread(cookie: string): Promise<{ token: string; 
   globalThreadId = threadId;
   return { token, threadId };
 }
+
 async function enviarCriarCenarioComCopilot(token: string, threadId: string, userStory: string, cenarioOriginal: string): Promise<string> {
   console.log('🔍 Copilot user Story recebida:', userStory);
   console.log('🔍 Copilot cenario Original:', cenarioOriginal);
@@ -900,6 +909,7 @@ async function enviarCriarCenarioComCopilot(token: string, threadId: string, use
   console.log('🔍 Copilot messagesData:', messagesLength);
   return ultimaResposta;
 }
+
 async function enviarCenarioParaCopilot(token: string, threadId: string, userStory: string, cenarioOriginal: string): Promise<string> {
   console.log('🔍 Copilot user Story recebida:', userStory);
   console.log('🔍 Copilot cenario Original:', cenarioOriginal);
@@ -910,8 +920,15 @@ async function enviarCenarioParaCopilot(token: string, threadId: string, userSto
                     1. Classifique o tipo do teste fornecido: **funcional, integração ou end-to-end**.  
                     2. Avalie se o cenário cobre o comportamento esperado da user story.  
                     3. Aponte se há pontos técnicos ou termos inadequados para testes de aceitação.  
-                    4. Reescreva o cenário utilizando **boas práticas do Gherkin com as palavras-chave em inglês** (Scenario, Given, And, When, Then) mantendo o cenário em portugues**, evitando qualquer linguagem técnica ou de implementação (como Postman, status HTTP, payloads, tabelas do banco, etc).  
-                    5. O novo cenário deve estar orientado a **comportamento do usuário** ou do sistema, com clareza, valor de negócio e sem ambiguidade.
+                    4. Reescreva o cenário utilizando **boas práticas do Gherkin com as palavras-chave em inglês** (Scenario, Given, And, When, Then)mantendo o cenário em portugues**, evitando qualquer linguagem técnica ou de implementação (como Postman, status HTTP, payloads, tabelas do banco, etc). 
+                      ⚠️ O novo cenário **deve obrigatoriamente estar dentro de um bloco de código com a tag \`\`\`gherkin** no início e \`\`\` no final**, como no exemplo abaixo:
+                      \`\`\`gherkin
+                      Scenario: Exemplo
+                      Given que o usuário acessa a tela de login
+                      When ele insere um e-mail válido
+                      Then ele deve receber um e-mail de redefinição de senha
+                      \`\`\`  
+                    5. O novo cenário (apenas 1 cenário) deve estar orientado a **comportamento do usuário** ou do sistema, com clareza, valor de negócio e sem ambiguidade.
                     ---
                     📝 **User Story Analisada:** ${userStory}
                     ---
@@ -1023,9 +1040,6 @@ async function analiseStoryEpicFunCopilot(token: string, threadId: string, descr
   return ultimaResposta;
 }
 
-
-
-// Utilitário para pegar as configurações do usuário no settings.json
 function getJiraSettings() {
   return {
     jiraDomain: vscode.workspace.getConfiguration().get<string>('plugin.jira.domain') || '',
@@ -1033,7 +1047,7 @@ function getJiraSettings() {
     jiraToken: vscode.workspace.getConfiguration().get<string>('plugin.jira.token') || '',
   };
 }
-// Utilitário para pegar as configurações do usuário no settings.json
+
 function getZephyrSettings() {
   return {
     zephyrOwnerId: vscode.workspace.getConfiguration().get<string>('plugin.zephyr.ownerId') || '',
@@ -1041,13 +1055,13 @@ function getZephyrSettings() {
     zephyrToken: vscode.workspace.getConfiguration().get<string>('plugin.zephyr.token') || '',
   };
 }
-// Utilitário para pegar as configurações do usuário no settings.json
+
 function getCopilotSettings() {
   return {
     copilotCookie: vscode.workspace.getConfiguration().get<string>('plugin.copilot.Cookie') || '',
   };
 }
-// Utilitário para codificar auth em base64
+
 function encodeAuth(email: string, token: string) {
   return Buffer.from(`${email}:${token}`).toString('base64');
 }

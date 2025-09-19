@@ -419,8 +419,8 @@ export class ZephyrPanel {
           );
 
           const filtros = (message && (message as any).filtros) ? (message as any).filtros : {};
-const _raw = Array.isArray(rawTests) ? rawTests : [];
-const testesZephyr = applyZephyrSelectFilters(_raw, filtros).map(mapZephyrTestsForWebview);
+          const _raw = Array.isArray(rawTests) ? rawTests : [];
+          const testesZephyr = applyZephyrSelectFilters(_raw, filtros).map(mapZephyrTestsForWebview);
 
           // Enviamos direto no formato que a webview já trata e renderiza
           this._panel.webview.postMessage({
