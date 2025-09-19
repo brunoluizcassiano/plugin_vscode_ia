@@ -563,6 +563,82 @@ function enviarCriarScripts() {
 
 function selecionarPasta() { vscode.postMessage({ type: 'selecionarPastaDestino' }); }
 
+// escapar HTML
+function esc(s){
+  return String(s ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// encurta caminhos pra ficar legível (mostra a partir de /cypress/ se existir)
+function shortPath(p){
+  const txt = String(p || '').replaceAll('\\','/');
+  const idx = txt.toLowerCase().lastIndexOf('/cypress/');
+  return idx >= 0 ? txt.slice(idx + 1) : txt;
+}
+
+// gera o HTML a partir do report
+function renderStepsFeedback(report){
+  if (!report) {
+    return `<div class="sf-card"><div class="sf-empty">Sem dados.</div></div>`;
+  }
+
+  // badge/header
+  let badgeClass = 'sf-warn', badgeText = 'Nenhum step novo';
+  if (report.status === 'created') { badgeClass = 'sf-ok';  badgeText = `Steps gerados: ${report.createdCount}`; }
+  if (report.status === 'error')   { badgeClass = 'sf-err'; badgeText = 'Erro ao gerar steps'; }
+
+  const header = `
+    <div class="sf-head">
+      <span class="sf-badge ${badgeClass}">${esc(badgeText)}</span>
+      ${report.filePath ? `<span class="sf-path">${esc(shortPath(report.filePath))}</span>` : ''}
+      ${report.status === 'error' && report.errors?.length ? `<span class="sf-path">• ${esc(report.errors.join(' • '))}</span>` : ''}
+    </div>
+  `;
+
+  // criados
+  const created = (report.created || []);
+  const createdBlock = created.length ? `
+    <div class="sf-title">Criados (${created.length})</div>
+    <ul class="sf-list">
+      ${created.map(({type,expr}) => `<li><span class="sf-code">${esc(type)} — ${esc(expr)}</span></li>`).join('')}
+    </ul>` : '';
+
+  // pulados (duplicados)
+  const skipped = (report.skipped || []);
+  const skippedBlock = `
+    <div class="sf-title">Pulados por duplicidade (${skipped.length})</div>
+    ${
+      skipped.length
+        ? `<ul class="sf-list">
+            ${skipped.map(({pair,locations}) => `
+              <li>
+                <span class="sf-code">${esc(pair.type)} — ${esc(pair.expr)}</span>
+                <div style="font-size:12px;opacity:.85;margin-top:4px">
+                  Já existe em: ${(locations||[]).map(l => `<span class="sf-pill">${esc(shortPath(l))}</span>`).join('')}
+                </div>
+              </li>`).join('')}
+           </ul>`
+        : `<div class="sf-empty">Nenhum duplicado detectado.</div>`
+    }
+  `;
+
+  return `<div class="sf-card">${header}${createdBlock}${skippedBlock}</div>`;
+}
+
+function setStepsFeedback(html) {
+  let el = document.getElementById('stepsFeedback') || document.getElementById('feedback');
+  if (!el) {
+    // cria automaticamente perto do formulário
+    const container = document.getElementById('formulario') || document.querySelector('.container') || document.body;
+    el = document.createElement('div');
+    el.id = 'stepsFeedback';
+    el.style.marginTop = '12px';
+    container.prepend(el);
+  }
+  el.innerHTML = html || '';
+}
+
 function enviarCriacaoCenariosIA() {
   const selecionados = [];
   document.querySelectorAll('.checkbox-ia:checked').forEach((cb) => {
@@ -1064,6 +1140,9 @@ if (hasIssue) {
 /* ===================== Mensagens do host ====================== */
 window.addEventListener('message', event => {
   const message = event.data;
+  if (message.type === 'steps:report') {
+    setStepsFeedback(renderStepsFeedback(message.payload));
+  }
   if (message.type === 'nomeUsuario') {
     document.getElementById('ola').textContent = '👋 Olá ' + message.nome;
     nomeRecebido = true;

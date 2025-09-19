@@ -163,6 +163,7 @@ export function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }: Vi
       <div class="note">As opções acima serão usadas como metadados do arquivo .feature (cabeçalho e tags) e para o nome do arquivo.</div>
       <button class="btn--full" type="submit">🚀 Gerar arquivo .feature</button>
       <div id="formError" class="error">Preencha ao menos o nome do arquivo ou selecione uma pasta.</div>
+      <div id="stepsFeedback" style="margin-top:12px"></div>
     </form>
   
     <div id="iaLoading">🔍 A IA está analisando os cenários...</div>

@@ -57,12 +57,6 @@ function toTag(s) {
     const base = normalizeTagBase(s);
     return base ? `@${base}` : null;
 }
-function unescapeLiteralNewlines(s) {
-    if (!s)
-        return '';
-    // transforma "\r\n" ou "\n" LITERAIS em quebras reais e normaliza CRLF
-    return s.replace(/\\r\\n|\\n|\\r/g, '\n').replace(/\r\n?/g, '\n');
-}
 /** Remove cercas de código e normaliza quebras/indentação básica */
 function cleanGherkin(raw) {
     if (!raw)
@@ -122,8 +116,8 @@ function buildScenarioTags(it, opts) {
 }
 /** Constrói o conteúdo completo do arquivo .feature */
 function buildFeatureFile(items, opts) {
-    const featureName = unescapeLiteralNewlines(opts.featureName) || 'Feature gerada pela IA';
-    const ruleName = unescapeLiteralNewlines(opts.ruleName);
+    const featureName = opts.featureName || 'Feature gerada pela IA';
+    const ruleName = opts.ruleName;
     const header = [];
     //  header.push(`Feature: ${featureName}`);
     //  if (ruleName && ruleName.trim()) header.push(`Rule: ${ruleName.trim()}`);
@@ -145,7 +139,7 @@ function buildFeatureFile(items, opts) {
         // tags exigidas: @tribo @issueId @issueKey (+ extras)
         const tagLine = buildScenarioTags(it, opts);
         const block = tagLine ? `${tagLine}\n${formatted}` : formatted;
-        scenarios.push(unescapeLiteralNewlines(`${block.trim()}\n`));
+        scenarios.push(`${block.trim()}\n`);
     }
     const body = scenarios.join('\n').replace(/\n{3,}/g, '\n\n'); // evita muitos saltos
     // Mantemos js-beautify para ficar alinhado aos outros generators

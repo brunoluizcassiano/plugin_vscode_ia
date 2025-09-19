@@ -503,3 +503,30 @@ select {
 .filters-row-actions .btn:active {
   transform: translateY(1px);
 }
+
+/* container da resposta */
+#stepsFeedback { margin-top:12px }
+
+/* card */
+.sf-card {
+  border: 1px solid var(--vscode-input-border, #3a3f44);
+  border-radius: 10px;
+  background: var(--vscode-editor-background, #1e1e1e);
+  padding: 12px 14px;
+}
+
+/* header + badges */
+.sf-head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px }
+.sf-badge { padding:2px 10px; border-radius:999px; font-size:12px; font-weight:600 }
+.sf-ok   { background:#1b5e20; color:#fff }
+.sf-warn { background:#455a64; color:#e2eef4 }
+.sf-err  { background:#7f1d1d; color:#ffd5d5 }
+.sf-path { font-size:12px; opacity:.85 }
+
+/* listas */
+.sf-title { margin:10px 0 6px; font-weight:600; font-size:13px }
+.sf-list { margin:0 0 10px 18px; padding:0; list-style:disc }
+.sf-list li {margin-bottom: 6px}
+.sf-code { background:rgba(255,255,255,.06); padding:2px 6px; border-radius:6px; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace }
+.sf-pill { display:inline-block; margin:3px 6px 0 0; padding:2px 6px; border:1px solid var(--vscode-input-border,#555); border-radius:6px; font-size:12px }
+.sf-empty { opacity:.7; font-size:12px }

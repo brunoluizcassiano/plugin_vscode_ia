@@ -58,15 +58,6 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
                 </select>
               </div>
               <div class="field">
-                <label for="fltStatus">Status</label>
-                <select id="fltStatus">
-                  <option value="N/A">N/A</option>
-                  <option value="Approved">Approved</option>
-                  <option value="Deprecated">Deprecated</option>
-                  <option value="Draft">Draft</option>
-                </select>
-              </div>
-              <div class="field">
                 <label for="fltTestType">Test Type</label>
                 <select id="fltTestType">
                   <option value="N/A">N/A</option>
@@ -168,6 +159,7 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
       <div class="note">As opções acima serão usadas como metadados do arquivo .feature (cabeçalho e tags) e para o nome do arquivo.</div>
       <button class="btn--full" type="submit">🚀 Gerar arquivo .feature</button>
       <div id="formError" class="error">Preencha ao menos o nome do arquivo ou selecione uma pasta.</div>
+      <div id="stepsFeedback" style="margin-top:12px"></div>
     </form>
   
     <div id="iaLoading">🔍 A IA está analisando os cenários...</div>

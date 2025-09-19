@@ -338,17 +338,12 @@ class ZephyrPanel {
                     tribeName: tribeName,
                     extraTags: extraTags
                 });
-                const report = yield (0, stepsGenerator_1.generateSteps)(caminho, itens, {
+                yield (0, stepsGenerator_1.generateSteps)(caminho, itens, {
                     featureName: featureName,
                     ruleName: ruleName,
                     fileBaseName: fileBaseName,
                     tribeName: tribeName,
                     extraTags: extraTags
-                });
-                // Envie para a Webview
-                panel.webview.postMessage({
-                    type: "steps:report",
-                    payload: report,
                 });
             }
             else if (message.type === 'listarProjetosJira') {

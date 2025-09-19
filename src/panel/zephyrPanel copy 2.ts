@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { getZephyrViewContent } from '../view/zephyr/zephyrView';
 import { generateFeatures } from '../generators/features/featureGenerator';
-import { generateSteps  }    from '../generators/steps/stepsGenerator';
+import { generateSteps }    from '../generators/steps/stepsGenerator';
 import path from 'path';
 
 type Selecionado = {
@@ -352,19 +352,13 @@ export class ZephyrPanel {
           tribeName: tribeName,
           extraTags: extraTags
          });
-         const report = await generateSteps(caminho, itens, {
+         await generateSteps(caminho, itens, {
           featureName: featureName,
           ruleName: ruleName,
           fileBaseName: fileBaseName,
           tribeName: tribeName,
           extraTags: extraTags
          });
-
-         // Envie para a Webview
-        panel.webview.postMessage({
-          type: "steps:report",
-          payload: report,
-        });
       } else if (message.type === 'listarProjetosJira'){
         try {
           // Chama o comando já registrado no extension.ts

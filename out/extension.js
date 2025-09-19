@@ -828,7 +828,8 @@ function enviarCriarCenarioComCopilot(token, threadId, userStory, cenarioOrigina
         console.log('🔍 Copilot cenario Original:', cenarioOriginal);
         const payload = {
             responseMessageID: crypto.randomUUID(),
-            content: `Com base na análise da user story abaixo, crie cenários de testes e realize as seguintes ações:
+            content: `Você é um analista de QA funcional. Avalie a user story a seguir priorizando visão de negócio e jornada do cliente, NÃO aspectos técnicos e crie a maior quantidade de testes possiveis e aplique tecnicas de testes avançadas.
+              Com base na análise da user story abaixo, crie cenários de testes e realize as seguintes ações:
                     1. Classifique o tipo do teste criado (**Test Type**): escolha entre *End to End*, *Regression*, *Acceptance* ou *UI*.  
                     2. Classifique o cenário como **Test Class**: *Positive* ou *Negative*.  
                     3. Classifique o cenário como **Test Group**: *Backend*, *Front-End* ou *Desktop*.
@@ -896,12 +897,20 @@ function enviarCenarioParaCopilot(token, threadId, userStory, cenarioOriginal) {
         console.log('🔍 Copilot cenario Original:', cenarioOriginal);
         const payload = {
             responseMessageID: crypto.randomUUID(),
-            content: `Com base na análise da user story abaixo, avalie também o cenário de teste fornecido e realize as seguintes ações:
+            content: `Você é um analista de QA funcional. Avalie a user story a seguir priorizando visão de negócio e jornada do cliente, NÃO aspectos técnicos e crie a maior quantidade de testes possiveis e aplique tecnicas de testes avançadas.
+              Com base na análise da user story abaixo, avalie também o cenário de teste fornecido e realize as seguintes ações:
                     1. Classifique o tipo do teste fornecido: **funcional, integração ou end-to-end**.  
                     2. Avalie se o cenário cobre o comportamento esperado da user story.  
                     3. Aponte se há pontos técnicos ou termos inadequados para testes de aceitação.  
-                    4. Reescreva o cenário utilizando **boas práticas do Gherkin com as palavras-chave em inglês** (Scenario, Given, And, When, Then) mantendo o cenário em portugues**, evitando qualquer linguagem técnica ou de implementação (como Postman, status HTTP, payloads, tabelas do banco, etc).  
-                    5. O novo cenário deve estar orientado a **comportamento do usuário** ou do sistema, com clareza, valor de negócio e sem ambiguidade.
+                    4. Reescreva o cenário utilizando **boas práticas do Gherkin com as palavras-chave em inglês** (Scenario, Given, And, When, Then)mantendo o cenário em portugues**, evitando qualquer linguagem técnica ou de implementação (como Postman, status HTTP, payloads, tabelas do banco, etc). 
+                      ⚠️ O novo cenário **deve obrigatoriamente estar dentro de um bloco de código com a tag \`\`\`gherkin** no início e \`\`\` no final**, como no exemplo abaixo:
+                      \`\`\`gherkin
+                      Scenario: Exemplo
+                      Given que o usuário acessa a tela de login
+                      When ele insere um e-mail válido
+                      Then ele deve receber um e-mail de redefinição de senha
+                      \`\`\`  
+                    5. O novo cenário (apenas 1 cenário) deve estar orientado a **comportamento do usuário** ou do sistema, com clareza, valor de negócio e sem ambiguidade.
                     ---
                     📝 **User Story Analisada:** ${userStory}
                     ---
@@ -1015,7 +1024,6 @@ function analiseStoryEpicFunCopilot(token, threadId, description, bdd) {
         return ultimaResposta;
     });
 }
-// Utilitário para pegar as configurações do usuário no settings.json
 function getJiraSettings() {
     return {
         jiraDomain: vscode.workspace.getConfiguration().get('plugin.jira.domain') || '',
@@ -1023,7 +1031,6 @@ function getJiraSettings() {
         jiraToken: vscode.workspace.getConfiguration().get('plugin.jira.token') || '',
     };
 }
-// Utilitário para pegar as configurações do usuário no settings.json
 function getZephyrSettings() {
     return {
         zephyrOwnerId: vscode.workspace.getConfiguration().get('plugin.zephyr.ownerId') || '',
@@ -1031,13 +1038,11 @@ function getZephyrSettings() {
         zephyrToken: vscode.workspace.getConfiguration().get('plugin.zephyr.token') || '',
     };
 }
-// Utilitário para pegar as configurações do usuário no settings.json
 function getCopilotSettings() {
     return {
         copilotCookie: vscode.workspace.getConfiguration().get('plugin.copilot.Cookie') || '',
     };
 }
-// Utilitário para codificar auth em base64
 function encodeAuth(email, token) {
     return Buffer.from(`${email}:${token}`).toString('base64');
 }
