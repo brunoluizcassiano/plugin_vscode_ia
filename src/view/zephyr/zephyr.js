@@ -32,6 +32,41 @@ const FILTER_IDS = {
   clearBtn: 'btnClearFilters',
 };
 
+const NORMALIZE = {
+  testType: {
+    'End to End': 'End To End',
+    'end to end': 'End To End',
+    'end 2 end': 'End To End',
+    'e2e': 'End To End',
+    'acceptance': 'Acceptance',
+    'regression': 'Regression',
+    'sanity': 'Sanity',
+    'security': 'Security',
+    'performance': 'Performance',
+    'ui': 'UI',
+    'n/a': 'N/A',
+  },
+  testClass: {
+    'positive': 'Positive',
+    'negative': 'Negative',
+    'n/a': 'N/A',
+  },
+  testGroup: {
+    'backend': 'Backend',
+    'front-end': 'Front-End',
+    'frontend': 'Front-End',
+    'desktop': 'Desktop',
+    'n/a': 'N/A',
+  }
+};
+
+function normVal(kind, value) {
+  const raw = (value || '').trim();
+  if (!raw) return 'N/A';
+  const k = raw.toLowerCase().replace(/\s+/g, ' ');
+  return NORMALIZE[kind]?.[k] || raw;
+}
+
 const $filters = {
   automationStatus: document.getElementById(FILTER_IDS.automationStatus),
   status: document.getElementById(FILTER_IDS.status),
@@ -587,25 +622,46 @@ function enviarAtualizacao() {
   vscode.postMessage({ type: 'enviarAtualizacaoParaZephyr', payload: selecionados });
 }
 
+// function getMetaForIdx(idx) {
+//  const byId = (id) => document.getElementById(id);
+//  const read = (el) => (el?.value ?? el?.textContent ?? '').trim();
+//  if (isManual(idx)) {
+//    return {
+//      automationStatus: read(byId(`automationStatus-${idx}`)) || 'Not Automated',
+//      testClass:  read(byId(`metaTestClass-${idx}`))  || 'N/A',
+//      testType:   read(byId(`metaTestType-${idx}`))   || 'N/A',
+//      testGroup:  read(byId(`metaTestGroup-${idx}`))  || 'N/A',
+//    };
+//  }
+//  // IA (spans)
+//  return {
+//    automationStatus: read(byId(`automationStatus-${idx}`)) || 'Not Automated',
+//    testClass:  read(byId(`testClass-${idx}`))  || 'N/A',
+//    testType:   read(byId(`testType-${idx}`))   || 'N/A',
+//    testGroup:  read(byId(`testGroup-${idx}`))  || 'N/A',
+//  };
+// }
 function getMetaForIdx(idx) {
- const byId = (id) => document.getElementById(id);
- const read = (el) => (el?.value ?? el?.textContent ?? '').trim();
- if (isManual(idx)) {
-   return {
-     automationStatus: read(byId(`automationStatus-${idx}`)) || 'Not Automated',
-     testClass:  read(byId(`metaTestClass-${idx}`))  || 'N/A',
-     testType:   read(byId(`metaTestType-${idx}`))   || 'N/A',
-     testGroup:  read(byId(`metaTestGroup-${idx}`))  || 'N/A',
-   };
- }
- // IA (spans)
- return {
-   automationStatus: read(byId(`automationStatus-${idx}`)) || 'Not Automated',
-   testClass:  read(byId(`testClass-${idx}`))  || 'N/A',
-   testType:   read(byId(`testType-${idx}`))   || 'N/A',
-   testGroup:  read(byId(`testGroup-${idx}`))  || 'N/A',
- };
+  const byId = (id) => document.getElementById(id);
+  const read = (el) => (el?.value ?? el?.textContent ?? '').trim();
+
+  if (isManual(idx)) {
+    // selects (manual)
+    const automationStatus = read(byId(`automationStatus-${idx}`)) || 'Not Automated';
+    const testClass  = normVal('testClass',  read(byId(`metaTestClass-${idx}`)));
+    const testType   = normVal('testType',   read(byId(`metaTestType-${idx}`)));
+    const testGroup  = normVal('testGroup',  read(byId(`metaTestGroup-${idx}`)));
+    return { automationStatus, testClass, testType, testGroup };
+  }
+
+  // spans (IA)
+  const automationStatus = read(byId(`automationStatus-${idx}`)) || 'Not Automated';
+  const testClass  = normVal('testClass',  read(byId(`testClass-${idx}`)));
+  const testType   = normVal('testType',   read(byId(`testType-${idx}`)));
+  const testGroup  = normVal('testGroup',  read(byId(`testGroup-${idx}`)));
+  return { automationStatus, testClass, testType, testGroup };
 }
+
 
 // Resolve a pasta selecionada (nível mais específico)
 function resolveFolderId(idx) {
