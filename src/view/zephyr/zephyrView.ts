@@ -62,15 +62,6 @@ export function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }: Vi
                 </select>
               </div>
               <div class="field">
-                <label for="fltStatus">Status</label>
-                <select id="fltStatus">
-                  <option value="N/A">N/A</option>
-                  <option value="Approved">Approved</option>
-                  <option value="Deprecated">Deprecated</option>
-                  <option value="Draft">Draft</option>
-                </select>
-              </div>
-              <div class="field">
                 <label for="fltTestType">Test Type</label>
                 <select id="fltTestType">
                   <option value="N/A">N/A</option>

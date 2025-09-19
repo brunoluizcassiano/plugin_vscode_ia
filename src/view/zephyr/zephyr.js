@@ -25,7 +25,6 @@ const projectFlow = {
 
 const FILTER_IDS = {
   automationStatus: 'fltAutomationStatus',
-  status: 'fltStatus',
   testType: 'fltTestType',
   testClass: 'fltTestClass',
   testGroup: 'fltTestGroup',
@@ -69,7 +68,6 @@ function normVal(kind, value) {
 
 const $filters = {
   automationStatus: document.getElementById(FILTER_IDS.automationStatus),
-  status: document.getElementById(FILTER_IDS.status),
   testType: document.getElementById(FILTER_IDS.testType),
   testClass: document.getElementById(FILTER_IDS.testClass),
   testGroup: document.getElementById(FILTER_IDS.testGroup),
@@ -133,7 +131,6 @@ function normalize(v) { return v === NA ? '' : (v || ''); }
 function getFiltersFromUI() {
   return {
     automationStatus: normalize($filters.automationStatus && $filters.automationStatus.value),
-    status: normalize($filters.status && $filters.status.value),
     testType: normalize($filters.testType && $filters.testType.value),
     testClass: normalize($filters.testClass && $filters.testClass.value),
     testGroup: normalize($filters.testGroup && $filters.testGroup.value),
@@ -143,7 +140,6 @@ function getFiltersFromUI() {
 function applyFiltersToUI(filters) {
   if (!filters) return;
   if ($filters.automationStatus) $filters.automationStatus.value = filters.automationStatus || NA;
-  if ($filters.status) $filters.status.value = filters.status || NA;
   if ($filters.testType) $filters.testType.value = filters.testType || NA;
   if ($filters.testClass) $filters.testClass.value = filters.testClass || NA;
   if ($filters.testGroup) $filters.testGroup.value = filters.testGroup || NA;
@@ -160,7 +156,7 @@ function getFiltersFromState() {
 }
 
 function bindFilterListeners() {
-  [$filters.automationStatus, $filters.status, $filters.testType, $filters.testClass, $filters.testGroup]
+  [$filters.automationStatus, $filters.testType, $filters.testClass, $filters.testGroup]
     .forEach((el) => {
       if (!el) return;
       el.addEventListener('change', () => {
@@ -767,7 +763,6 @@ function renderDados(i) {
             <p><strong>🏷️ Test Class: </strong> ${t.details.customFields?.['Test Class'] || 'N/A'}</p>
             <p><strong>📦 Test Type: </strong> ${t.details.customFields?.['Test Type'] || 'N/A'}</p>
             <p><strong>🧪 Test Group: </strong> ${t.details.customFields?.['Test Group'] || 'N/A'}</p>
-            <p><strong>📌 Status: </strong> ${t.details.status || 'N/A'}</p>
           </div>
           <pre style="background-color: #1e1e1e; padding: 1rem; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; color: #ccc;">${t.script}</pre>
   
