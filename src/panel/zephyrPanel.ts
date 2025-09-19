@@ -51,14 +51,13 @@ function _zNormAutomation(s: string): string {
 }
 /**
  * Aplica SOMENTE os filtros dos SELECTs cujo valor != 'N/A'
- * Campos: automationStatus, status, testType, testClass, testGroup
+ * Campos: automationStatus, testType, testClass, testGroup
  */
 function applyZephyrSelectFilters(rawTests: any[], filtros: any): any[] {
   if (!Array.isArray(rawTests) || !filtros || typeof filtros !== 'object') return rawTests || [];
 
   const sel = {
     automationStatus: _zNorm((filtros as any).automationStatus),
-    status:           _zNorm((filtros as any).status),
     testType:         _zNorm((filtros as any).testType),
     testClass:        _zNorm((filtros as any).testClass),
     testGroup:        _zNorm((filtros as any).testGroup),
@@ -68,7 +67,6 @@ function applyZephyrSelectFilters(rawTests: any[], filtros: any): any[] {
   const out: any[] = [];
   for (const t of rawTests) {
     const aut    = _zNormAutomation(_zFrom(t, ['automationStatus','automation','automated'], ['Automation status','Automation Status','Automação']));
-    const stat   = _zFrom(t, ['status','state'], ['Status']);
     const ttype  = _zFrom(t, ['testType','type'], ['Test Type','Tipo']);
     const tclass = _zFrom(t, ['testClass','class'], ['Test Class','Classe']);
     const tgroup = _zFrom(t, ['testGroup','group'], ['Test Group','Grupo']);
@@ -77,7 +75,6 @@ function applyZephyrSelectFilters(rawTests: any[], filtros: any): any[] {
       const want = _zNormAutomation(sel.automationStatus);
       if (!want || want !== aut) continue;
     }
-    if (use(sel.status)    && !_zEqualsCi(stat,   sel.status))    continue;
     if (use(sel.testType)  && !_zEqualsCi(ttype,  sel.testType))  continue;
     if (use(sel.testClass) && !_zEqualsCi(tclass, sel.testClass)) continue;
     if (use(sel.testGroup) && !_zEqualsCi(tgroup, sel.testGroup)) continue;
