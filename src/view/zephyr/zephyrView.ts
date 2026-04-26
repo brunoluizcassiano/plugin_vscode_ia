@@ -4,7 +4,6 @@ type ViewArgs = {
   styleUri: string;
   scriptUri?: string;
 };
-
 export function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }: ViewArgs): string {
   return `
   <!DOCTYPE html>
@@ -33,7 +32,6 @@ export function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }: Vi
   
     <div id="issueHeader" class="issue-header"></div>
     <div id="issueTests" class="issue-tests"></div>
-
     <!-- =================== Fluxo por PROJETO (simplificado) =================== -->
     <div id="projectFlow" style="display:none; margin-bottom:1rem;">
       <h2>Explorar testes por Projeto</h2>
@@ -43,7 +41,6 @@ export function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }: Vi
           <select id="projectSelect"><option value="">Selecione...</option></select>
         </div>
       </div>
-
       <div id="projectStructure" style="display:none; margin-top:1rem;">
         <div>
           <div class="muted">Estrutura de pastas (Zephyr)</div>
@@ -96,14 +93,11 @@ export function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }: Vi
               <button id="btnClearFilters" type="button" class="btn">Limpar filtros</button>
             </div>
           </div>
-
           <div id="folderTree" class="folder-tree"></div>
         </div>
-
         <div class="actions-row">
           <button id="btnApplyStructure" type="button" disabled>Aplicar Seleção</button>
         </div>
-
         <div id="projLoading" style="display:none; margin-top:.5rem; color:#ccc;">Carregando...</div>
       </div>
     </div>

@@ -1,0 +1,10 @@
+.vscode/**
+.vscode-test/**
+src/**
+node_modules/.bin/**
+**/*.map
+**/*.ts
+.git/**
+.gitignore
+README-dev.md
+tsconfig.json

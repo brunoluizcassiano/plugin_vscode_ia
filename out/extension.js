@@ -43,8 +43,185 @@ const jiraPanel_1 = require("./panel/jiraPanel");
 const zephyrPanel_1 = require("./panel/zephyrPanel");
 const backendPanel_1 = require("./panel/backendPanel");
 const settingsPanel_1 = require("./panel/settingsPanel");
+const copilotLmBridge_1 = require("./copilot/copilotLmBridge");
+const prompts_1 = require("./prompts");
 let globalToken = null;
 let globalThreadId = null;
+// === GitHub Login: helpers/estado ===
+const GH_SCOPES = ['read:user', 'user:email'];
+let ghStatusItem;
+function getStoredGitHubUser(context) {
+    return context.globalState.get('plugin.github.user');
+}
+function fetchGitHubUser(accessToken) {
+    var _a;
+    return __awaiter(this, void 0, void 0, function* () {
+        const headers = { Authorization: `Bearer ${accessToken}`, Accept: 'application/vnd.github+json' };
+        const userRes = yield (0, node_fetch_1.default)('https://api.github.com/user', { headers });
+        if (!userRes.ok)
+            throw new Error(`Falha ao obter usuário do GitHub: ${userRes.status}`);
+        const user = yield userRes.json();
+        let email = user.email;
+        if (!email) {
+            // tenta buscar e-mail primário (público/privado)
+            const emailRes = yield (0, node_fetch_1.default)('https://api.github.com/user/emails', { headers });
+            if (emailRes.ok) {
+                const emails = yield emailRes.json();
+                const primary = Array.isArray(emails) ? emails.find((e) => e.primary) : undefined;
+                email = (primary === null || primary === void 0 ? void 0 : primary.email) || ((_a = emails === null || emails === void 0 ? void 0 : emails[0]) === null || _a === void 0 ? void 0 : _a.email);
+            }
+        }
+        return {
+            login: user.login,
+            name: user.name || undefined,
+            email,
+            avatar_url: user.avatar_url || undefined,
+            html_url: user.html_url || undefined,
+            id: user.id || undefined,
+        };
+    });
+}
+function showOrUpdateGitHubStatus(user) {
+    if (!ghStatusItem) {
+        ghStatusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+        ghStatusItem.command = 'plugin-vscode.refreshGitHubSession';
+    }
+    if (user === null || user === void 0 ? void 0 : user.login) {
+        ghStatusItem.text = `$(github) ${user.login}`;
+        ghStatusItem.tooltip = user.name ? `GitHub: ${user.name}` : 'GitHub conectado';
+    }
+    else {
+        ghStatusItem.text = '$(github) Entrar no GitHub';
+        ghStatusItem.tooltip = 'Clique para conectar sua conta do GitHub';
+    }
+    ghStatusItem.show();
+}
+function ensureGitHubSession(opts) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const interactive = !!(opts === null || opts === void 0 ? void 0 : opts.interactive);
+        const silent = !!(opts === null || opts === void 0 ? void 0 : opts.silent);
+        // 1) Tenta silencioso primeiro (não abre UI)
+        if (silent) {
+            const s = yield vscode.authentication.getSession('github', GH_SCOPES, { createIfNone: false, silent: true });
+            if (s)
+                return s;
+        }
+        // 2) Se pedir interativo, força criar sessão (abre UI de login)
+        if (interactive) {
+            return vscode.authentication.getSession('github', GH_SCOPES, { createIfNone: true });
+        }
+        // 3) Por padrão, tenta pegar sem criar (não abre UI)
+        return vscode.authentication.getSession('github', GH_SCOPES, { createIfNone: false });
+    });
+}
+function identifyGitHubOnStartup(context) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const aiProvider = vscode.workspace.getConfiguration().get('plugin.ai.provider', 'auto');
+        if (aiProvider !== 'copilot') {
+            showOrUpdateGitHubStatus(undefined);
+            return;
+        }
+        try {
+            // tenta silencioso
+            let session = yield ensureGitHubSession({ silent: true });
+            if (!session) {
+                // Oferece entrar agora para não "forçar" popup automaticamente
+                const choice = yield vscode.window.showInformationMessage('Para personalizar a experiência, conecte seu GitHub.', 'Entrar no GitHub', 'Agora não');
+                if (choice === 'Entrar no GitHub') {
+                    session = yield ensureGitHubSession({ interactive: true });
+                }
+            }
+            if (session) {
+                const ghUser = yield fetchGitHubUser(session.accessToken);
+                yield context.globalState.update('plugin.github.user', ghUser);
+                console.log('🔐 GitHub conectado como:', ghUser.login);
+                console.log('🔐 GitHub conectado com accessToken:', session.accessToken);
+                showOrUpdateGitHubStatus(ghUser);
+            }
+            else {
+                // sem sessão
+                yield context.globalState.update('plugin.github.user', undefined);
+                showOrUpdateGitHubStatus(undefined);
+            }
+        }
+        catch (err) {
+            console.warn('⚠️ Não foi possível identificar o login do GitHub:', (err === null || err === void 0 ? void 0 : err.message) || err);
+            showOrUpdateGitHubStatus(undefined);
+        }
+    });
+}
+function getProjectMap() {
+    return vscode.workspace.getConfiguration().get('plugin.projectMap', {});
+}
+function getStrict() {
+    return vscode.workspace.getConfiguration().get('plugin.projectMap.strict', false);
+}
+function jiraKeyFrom(input) {
+    const k = (input || '').includes('-') ? input.split('-')[0] : input;
+    return (k || '').trim().toUpperCase();
+}
+/** Resolve projeto Zephyr a partir de issueKey/projeto. Não lança; devolve null se não conseguir. */
+function tryResolveZephyrProject(input) {
+    const jiraKey = jiraKeyFrom(input);
+    if (!jiraKey)
+        return null;
+    const map = getProjectMap();
+    const raw = map[jiraKey];
+    if (!raw) {
+        if (getStrict())
+            return null; // strict ligado e sem de/para → pedir ação ao usuário
+        return { zephyrKey: jiraKey }; // fallback: usa o próprio key do Jira
+    }
+    if (typeof raw === 'string')
+        return { zephyrKey: raw.toUpperCase() };
+    return {
+        zephyrKey: String(raw.zephyrKey || jiraKey).toUpperCase(),
+        zephyrProjectId: raw.zephyrProjectId
+    };
+}
+/** Se não der para resolver, pergunta ao usuário (input + botões). */
+function resolveProjectOrPrompt(originLabel, issueOrProject) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let project = tryResolveZephyrProject(issueOrProject !== null && issueOrProject !== void 0 ? issueOrProject : '');
+        if (project)
+            return project;
+        const jiraKey = jiraKeyFrom(issueOrProject !== null && issueOrProject !== void 0 ? issueOrProject : '');
+        const opts = ['Informar projeto…', 'Abrir Settings', getStrict() ? 'Desativar strict agora' : undefined]
+            .filter(Boolean);
+        const pick = yield vscode.window.showWarningMessage(`Projeto ${jiraKey ? `'${jiraKey}'` : '(vazio)'} sem de/para e modo estrito ${getStrict() ? 'ligado' : 'desligado'}.`, ...opts);
+        if (pick === 'Desativar strict agora') {
+            yield vscode.workspace.getConfiguration().update('plugin.projectMap.strict', false, vscode.ConfigurationTarget.Global);
+            project = tryResolveZephyrProject(issueOrProject !== null && issueOrProject !== void 0 ? issueOrProject : '');
+            if (project)
+                return project;
+        }
+        if (pick === 'Abrir Settings') {
+            yield vscode.commands.executeCommand('workbench.action.openSettingsJson');
+            throw new Error(`[${originLabel}] Ação cancelada: abra as configurações e crie o de/para.`);
+        }
+        if (pick === 'Informar projeto…') {
+            const typed = yield vscode.window.showInputBox({
+                prompt: 'Informe o key do projeto Jira (ex.: TBTX) ou uma issue (ex.: TBTX-123)',
+                placeHolder: 'TBTX ou TBTX-123',
+                ignoreFocusOut: true
+            });
+            project = tryResolveZephyrProject(typed !== null && typed !== void 0 ? typed : '');
+            if (!project)
+                throw new Error(`[${originLabel}] Não foi possível resolver o projeto a partir de "${typed !== null && typed !== void 0 ? typed : ''}".`);
+            return project;
+        }
+        throw new Error(`[${originLabel}] Ação cancelada pelo usuário.`);
+    });
+}
+/** Monta URL com projectKey ou projectId, conforme disponível. */
+function withProjectParam(baseUrl, project) {
+    const url = new URL(baseUrl);
+    if (project.zephyrProjectId)
+        url.searchParams.set('projectId', String(project.zephyrProjectId));
+    else
+        url.searchParams.set('projectKey', project.zephyrKey);
+    return url.toString();
+}
 function activate(context) {
     return __awaiter(this, void 0, void 0, function* () {
         console.log('✅ Plugin "Form Plugin" está sendo ativado...');
@@ -54,9 +231,27 @@ function activate(context) {
         context.subscriptions.push(vscode.window.registerWebviewViewProvider('homeView', // << TEM QUE BATER COM O ID DO `package.json`
         homeViewProvider));
         console.log('✅ HomeViewProvider registrada.');
+        // === GitHub Login: identifica somente quando Copilot estiver selecionado
+        void identifyGitHubOnStartup(context);
+        // Observa mudanças na sessão do GitHub (login/logout em outro lugar)
+        context.subscriptions.push(vscode.authentication.onDidChangeSessions((e) => __awaiter(this, void 0, void 0, function* () {
+            if (e.provider.id === 'github') {
+                yield identifyGitHubOnStartup(context);
+            }
+        })));
         // O foco da visualização deve ser feito manualmente ou em resposta a um comando.
-        yield vscode.commands.executeCommand('workbench.view.extension.formSidebar');
-        yield vscode.commands.executeCommand('homeView.focus', { preserveFocus: true });
+        // Por padrão não forçamos a abertura/foco da view ao iniciar — controlado por plugin.openOnStart
+        try {
+            const openOnStart = vscode.workspace.getConfiguration().get('plugin.openOnStart', false);
+            if (openOnStart) {
+                yield vscode.commands.executeCommand('workbench.view.extension.formSidebar');
+                yield vscode.commands.executeCommand('homeView.focus', { preserveFocus: true });
+            }
+        }
+        catch (e) {
+            // não bloquear ativação em caso de erro ao ler config
+            console.warn('Erro ao checar plugin.openOnStart:', e);
+        }
         // Registro dos comandos
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.openJira', () => {
             jiraPanel_1.JiraPanel.createOrShow(context.extensionUri);
@@ -94,11 +289,13 @@ function activate(context) {
         })));
         // Projetos Jira (exemplo com filtro fixo que você usa)
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.getJiraProjects', () => __awaiter(this, void 0, void 0, function* () {
-            const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
+            const { jiraDomain, jiraEmail, jiraToken, jiraProjectCategoryId } = getJiraSettings();
             const auth = encodeAuth(jiraEmail, jiraToken);
             try {
-                // const response = await fetch(`https://${jiraDomain}/rest/api/3/project/search?categoryId=10018`, {
-                const response = yield (0, node_fetch_1.default)(`https://${jiraDomain}/rest/api/3/project`, {
+                const projectUrl = jiraProjectCategoryId
+                    ? `https://${jiraDomain}/rest/api/3/project/search?categoryId=${encodeURIComponent(jiraProjectCategoryId)}`
+                    : `https://${jiraDomain}/rest/api/3/project`;
+                const response = yield (0, node_fetch_1.default)(projectUrl, {
                     method: 'GET',
                     headers: {
                         'Authorization': `Basic ${auth}`,
@@ -106,8 +303,13 @@ function activate(context) {
                     },
                 });
                 const data = yield response.json();
-                // return data.values.map((p: any) => ({ key: p.key, name: p.name }));
-                return data.map((p) => ({ key: p.key, name: p.name }));
+                const projects = Array.isArray(data === null || data === void 0 ? void 0 : data.values)
+                    ? data.values
+                    : Array.isArray(data)
+                        ? data
+                        : [];
+                return projects.map((p) => ({ key: p.key, name: p.name }));
+                // return data.map((p: any) => ({ key: p.key, name: p.name }));
             }
             catch (err) {
                 vscode.window.showErrorMessage(`Erro ao buscar projetos do Jira: ${(err === null || err === void 0 ? void 0 : err.message) || err}`);
@@ -148,7 +350,7 @@ function activate(context) {
             const auth = encodeAuth(jiraEmail, jiraToken);
             const term = (texto || '').trim();
             // Tipos permitidos
-            const allowedTypesJQL = 'issuetype in ("Functionality","Epic","Story")';
+            const allowedTypesJQL = 'issuetype in ("Functionality", "Funcionalidade", "Epic","Story", "História")';
             const isFullKey = /^[A-Z][A-Z0-9_]*-\d+$/i.test(term);
             try {
                 if (isFullKey) {
@@ -171,7 +373,8 @@ function activate(context) {
                     const res = yield (0, node_fetch_1.default)(url, { headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' } });
                     const data = yield res.json();
                     const issues = ((data === null || data === void 0 ? void 0 : data.sections) || []).flatMap((s) => s.issues || []);
-                    return issues.slice(0, 10).map((i) => ({
+                    const uniqueIssues = Array.from(new Map(issues.map((i) => [String(i.key || '').toUpperCase(), i])).values());
+                    return uniqueIssues.slice(0, 10).map((i) => ({
                         key: i.key,
                         summary: i.summary || i.summaryText || i.label || ''
                     }));
@@ -201,7 +404,7 @@ function activate(context) {
                 const data = yield response.json();
                 // ✅ Verificar se o tipo da issue é permitido
                 const tipo = data.fields.issuetype.name;
-                const tiposPermitidos = ['Functionality', 'Funcionalidade', 'Epic', 'Story'];
+                const tiposPermitidos = ['Functionality', 'Funcionalidade', 'Epic', 'Story', "História"];
                 if (!tiposPermitidos.includes(tipo)) {
                     vscode.window.showErrorMessage(`Tipo de issue "${tipo}" não suportado para esta funcionalidade.`);
                     return null;
@@ -318,7 +521,8 @@ function activate(context) {
         vscode.commands.registerCommand('plugin-vscode.getZephyrFoldersByProject', (projectKeyParam) => __awaiter(this, void 0, void 0, function* () {
             const { zephyrToken, zephyrDomain } = getZephyrSettings();
             try {
-                const projectKey = String(projectKeyParam || '').trim();
+                // ✅ Resolve via de/para; se faltar, pergunta ao usuário
+                const projectKey = yield resolveProjectOrPrompt('Listar pastas', projectKeyParam);
                 if (!projectKey)
                     throw new Error('Project key não informada.');
                 let startAt = 0;
@@ -326,7 +530,10 @@ function activate(context) {
                 let isLast = false;
                 const allFolders = [];
                 while (!isLast) {
-                    const url = `https://${zephyrDomain}/v2/folders?maxResults=${maxResults}&startAt=${startAt}&projectKey=${encodeURIComponent(projectKey)}&folderType=TEST_CASE`;
+                    const base = `https://${zephyrDomain}/v2/folders`;
+                    const url = withProjectParam(base, projectKey) +
+                        `&maxResults=${maxResults}&startAt=${startAt}&folderType=TEST_CASE`;
+                    console.log('🔍 Zephyr folders URL:', url);
                     const res = yield (0, node_fetch_1.default)(url, {
                         headers: {
                             'Authorization': `Bearer ${zephyrToken}`,
@@ -375,7 +582,9 @@ function activate(context) {
             var _d, _e, _f;
             const { zephyrToken, zephyrDomain } = getZephyrSettings();
             const maxResults = (_d = opts === null || opts === void 0 ? void 0 : opts.maxResults) !== null && _d !== void 0 ? _d : 100;
-            if (!projectKey || !folderId) {
+            // ✅ Resolve via de/para; se faltar, pergunta ao usuário
+            const project = yield resolveProjectOrPrompt('Listar pastas', projectKey);
+            if (!project || !folderId) {
                 vscode.window.showErrorMessage('Projeto e pasta são obrigatórios.');
                 return [];
             }
@@ -385,11 +594,17 @@ function activate(context) {
             const allTests = [];
             try {
                 while (!isLast) {
-                    const url = `https://${zephyrDomain}/v2/testcases` +
-                        `?projectKey=${encodeURIComponent(projectKey)}` +
+                    // const url = `https://${zephyrDomain}/v2/testcases` +
+                    //   `?projectKey=${encodeURIComponent(projectKey)}` +
+                    //   `&folderId=${encodeURIComponent(String(folderId))}` +
+                    //   `&maxResults=${maxResults}` +
+                    //   `&startAt=${startAt}`;
+                    const base = `https://${zephyrDomain}/v2/testcases`;
+                    const url = withProjectParam(base, project) +
                         `&folderId=${encodeURIComponent(String(folderId))}` +
                         `&maxResults=${maxResults}` +
                         `&startAt=${startAt}`;
+                    console.log('🔍 Zephyr folders URL:', url);
                     const res = yield (0, node_fetch_1.default)(url, {
                         headers: {
                             'Authorization': `Bearer ${zephyrToken}`,
@@ -558,67 +773,34 @@ function activate(context) {
         })));
         // 🔍 Análise Story, Epic e Func com IA QA (Copilot)
         vscode.commands.registerCommand('plugin-vscode.analiseIaQa', (description, bdd) => __awaiter(this, void 0, void 0, function* () {
-            const { copilotCookie } = getCopilotSettings();
             try {
-                if (!globalToken || !globalThreadId) {
-                    yield criarTokenECriarThread(copilotCookie);
-                }
-                try {
-                    return yield analiseStoryEpicFunCopilot(globalToken, globalThreadId, description, bdd);
-                }
-                catch (err) {
-                    // Se falhou, tentar renovar token+thread uma única vez
-                    console.log('⚠️ Token expirado, tentando renovar...');
-                    yield criarTokenECriarThread(copilotCookie);
-                    return yield analiseStoryEpicFunCopilot(globalToken, globalThreadId, description, bdd);
-                }
+                const prompt = (0, prompts_1.buildAnaliseStoryEpicFunPrompt)({ description, bdd });
+                return yield (0, copilotLmBridge_1.askCopilotLm)(prompt, {});
             }
             catch (error) {
-                vscode.window.showErrorMessage(`Erro ao consultar IA Copilot: ${error.message}`);
+                vscode.window.showErrorMessage(`Erro ao consultar IA: ${error.message}`);
                 return '❌ Erro ao obter resposta da IA.';
             }
         }));
         // 🔍 Análise cenarios com IA QA (Copilot)
         vscode.commands.registerCommand('plugin-vscode.analiseCenariosIaQa', (userStory, cenario) => __awaiter(this, void 0, void 0, function* () {
-            const { copilotCookie } = getCopilotSettings();
             try {
-                if (!globalToken || !globalThreadId) {
-                    yield criarTokenECriarThread(copilotCookie);
-                }
-                try {
-                    return yield enviarCenarioParaCopilot(globalToken, globalThreadId, userStory, cenario);
-                }
-                catch (err) {
-                    // Se falhou, tentar renovar token+thread uma única vez
-                    console.log('⚠️ Token expirado, tentando renovar...');
-                    yield criarTokenECriarThread(copilotCookie);
-                    return yield enviarCenarioParaCopilot(globalToken, globalThreadId, userStory, cenario);
-                }
+                const prompt = (0, prompts_1.buildAnaliseCenarioPrompt)({ userStory, cenarioOriginal: cenario });
+                return yield (0, copilotLmBridge_1.askCopilotLm)(prompt, {});
             }
             catch (error) {
-                vscode.window.showErrorMessage(`Erro ao consultar IA Copilot: ${error.message}`);
+                vscode.window.showErrorMessage(`Erro ao consultar IA: ${error.message}`);
                 return '❌ Erro ao obter resposta da IA.';
             }
         }));
         // 🔍 Criar cenarios com IA QA (Copilot)
         vscode.commands.registerCommand('plugin-vscode.criarCenariosIaQa', (userStory, cenario) => __awaiter(this, void 0, void 0, function* () {
-            const { copilotCookie } = getCopilotSettings();
             try {
-                if (!globalToken || !globalThreadId) {
-                    yield criarTokenECriarThread(copilotCookie);
-                }
-                try {
-                    return yield enviarCriarCenarioComCopilot(globalToken, globalThreadId, userStory, cenario);
-                }
-                catch (err) {
-                    // Se falhou, tentar renovar token+thread uma única vez
-                    console.log('⚠️ Token expirado, tentando renovar...');
-                    yield criarTokenECriarThread(copilotCookie);
-                    return yield enviarCriarCenarioComCopilot(globalToken, globalThreadId, userStory, cenario);
-                }
+                const prompt = (0, prompts_1.buildCriarCenariosPrompt)({ userStory });
+                return yield (0, copilotLmBridge_1.askCopilotLm)(prompt, {});
             }
             catch (error) {
-                vscode.window.showErrorMessage(`Erro ao consultar IA Copilot: ${error.message}`);
+                vscode.window.showErrorMessage(`Erro ao consultar IA: ${error.message}`);
                 return '❌ Erro ao obter resposta da IA.';
             }
         }));
@@ -749,10 +931,17 @@ function activate(context) {
             let allFolders = [];
             let isLast = false;
             const maxResults = 100;
-            const projectKey = issueKey.slice(0, 4);
+            // const projectKey = issueKey.slice(0, 4);
+            // ✅ Resolve via de/para; se faltar, pergunta ao usuário
+            const project = yield resolveProjectOrPrompt('Listar pastas', issueKey);
             try {
                 while (!isLast) {
-                    const url = `https://${zephyrDomain}/v2/folders?maxResults=${maxResults}&startAt=${startAt}&projectKey=${projectKey}&folderType=TEST_CASE`;
+                    // const url = `https://${zephyrDomain}/v2/folders?maxResults=${maxResults}&startAt=${startAt}&projectKey=${projectKey}&folderType=TEST_CASE`;
+                    const base = `https://${zephyrDomain}/v2/folders`;
+                    // projectKey ou projectId + outros params
+                    const url = withProjectParam(base, project) +
+                        `&maxResults=${maxResults}&startAt=${startAt}&folderType=TEST_CASE`;
+                    console.log('🔍 Zephyr folders URL:', url);
                     const zephyrRes = yield (0, node_fetch_1.default)(url, {
                         headers: {
                             'Authorization': `Bearer ${zephyrToken}`,
@@ -781,254 +970,12 @@ function activate(context) {
     });
 }
 exports.activate = activate;
-function criarTokenECriarThread(cookie) {
-    return __awaiter(this, void 0, void 0, function* () {
-        // Criar token
-        const tokenRes = yield (0, node_fetch_1.default)(`https://github.com/github-copilot/chat/token`, {
-            method: 'POST',
-            headers: {
-                'accept': 'application/json',
-                'accept-encoding': 'application/json',
-                'accept-language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-                'Connection': 'keep-alive',
-                'Content-Length': '0',
-                'Content-Type': 'application/json',
-                'Cookie': `${cookie}`,
-                'GitHub-Verified-Fetch': 'true',
-                'Host': 'github.com',
-                'Origin': 'https://github.com'
-            },
-            body: JSON.stringify({})
-        });
-        const tokenData = yield tokenRes.json();
-        const token = tokenData.token;
-        console.log('🔍 Copilot token:', JSON.stringify(token, null, 2));
-        // Criar thread
-        const threadRes = yield (0, node_fetch_1.default)(`https://api.business.githubcopilot.com/github/chat/threads`, {
-            method: 'POST',
-            headers: {
-                'authorization': `GitHub-Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({})
-        });
-        const threadData = yield threadRes.json();
-        const threadId = threadData.thread_id;
-        console.log('🔍 Copilot threadId:', JSON.stringify(threadId, null, 2));
-        // Armazenar globalmente
-        globalToken = token;
-        globalThreadId = threadId;
-        return { token, threadId };
-    });
-}
-function enviarCriarCenarioComCopilot(token, threadId, userStory, cenarioOriginal) {
-    var _a, _b, _c, _d;
-    return __awaiter(this, void 0, void 0, function* () {
-        console.log('🔍 Copilot user Story recebida:', userStory);
-        console.log('🔍 Copilot cenario Original:', cenarioOriginal);
-        const payload = {
-            responseMessageID: crypto.randomUUID(),
-            content: `Você é um analista de QA funcional. Avalie a user story a seguir priorizando visão de negócio e jornada do cliente, NÃO aspectos técnicos e crie a maior quantidade de testes possiveis e aplique tecnicas de testes avançadas.
-              Com base na análise da user story abaixo, crie cenários de testes e realize as seguintes ações:
-                    1. Classifique o tipo do teste criado (**Test Type**): escolha entre *End to End*, *Regression*, *Acceptance* ou *UI*.  
-                    2. Classifique o cenário como **Test Class**: *Positive* ou *Negative*.  
-                    3. Classifique o cenário como **Test Group**: *Backend*, *Front-End* ou *Desktop*.
-                       ⚠️ Importante: os campos acima devem ser retornados exatamente como exemplo:
-                      **Test Type:** Acceptance  
-                      **Test Class:** Positive  
-                      **Test Group:** Front-End  
-                    4. Avalie se o cenário cobre o comportamento esperado da user story.  
-                    5. Aponte se há pontos técnicos ou termos inadequados para testes de aceitação.  
-                    6. Reescreva o cenário utilizando **boas práticas do Gherkin com as palavras-chave em inglês** (Scenario, Given, And, When, Then)mantendo o cenário em portugues**, evitando qualquer linguagem técnica ou de implementação (como Postman, status HTTP, payloads, tabelas do banco, etc). 
-                      ⚠️ O novo cenário **deve obrigatoriamente estar dentro de um bloco de código com a tag \`\`\`gherkin** no início e \`\`\` no final**, como no exemplo abaixo:
-                      \`\`\`gherkin
-                      Scenario: Exemplo
-                      Given que o usuário acessa a tela de login
-                      When ele insere um e-mail válido
-                      Then ele deve receber um e-mail de redefinição de senha
-                      \`\`\`  
-                    7. O novo cenário deve estar orientado a **comportamento do usuário** ou do sistema, com clareza, valor de negócio e sem ambiguidade.
-                    ---
-                    📝 **User Story Analisada:** ${userStory}`,
-            intent: 'conversation',
-            references: [],
-            context: [],
-            currentURL: 'https://github.com/copilot/c/f7d5070e-bbdc-4a40-a844-f8625f316c1a',
-            streaming: false,
-            confirmations: [],
-            customInstructions: [],
-            model: 'gpt-4.1',
-            mode: 'immersive',
-            parentMessageID: crypto.randomUUID(),
-            tools: [],
-            mediaContent: [],
-            skillOptions: { deepCodeSearch: false }
-        };
-        const sendMsgRes = yield (0, node_fetch_1.default)(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
-            method: 'POST',
-            headers: {
-                'authorization': `GitHub-Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload)
-        });
-        if (!sendMsgRes.ok) {
-            throw new Error(`Erro ao enviar cenário: ${sendMsgRes.status}`);
-        }
-        yield new Promise(r => setTimeout(r, 1000));
-        const messagesRes = yield (0, node_fetch_1.default)(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
-            method: 'GET',
-            headers: {
-                'authorization': `GitHub-Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-        });
-        const messagesData = yield messagesRes.json();
-        const ultimaResposta = ((_b = (_a = messagesData === null || messagesData === void 0 ? void 0 : messagesData.messages) === null || _a === void 0 ? void 0 : _a[messagesData.messages.length - 1]) === null || _b === void 0 ? void 0 : _b.content) || '⚠️ Nenhuma resposta recebida.';
-        const messagesLength = (_d = (_c = messagesData === null || messagesData === void 0 ? void 0 : messagesData.messages) === null || _c === void 0 ? void 0 : _c[messagesData.messages.length - 1]) === null || _d === void 0 ? void 0 : _d.content;
-        console.log('🔍 Copilot messagesData:', messagesLength);
-        return ultimaResposta;
-    });
-}
-function enviarCenarioParaCopilot(token, threadId, userStory, cenarioOriginal) {
-    var _a, _b, _c, _d;
-    return __awaiter(this, void 0, void 0, function* () {
-        console.log('🔍 Copilot user Story recebida:', userStory);
-        console.log('🔍 Copilot cenario Original:', cenarioOriginal);
-        const payload = {
-            responseMessageID: crypto.randomUUID(),
-            content: `Você é um analista de QA funcional. Avalie a user story a seguir priorizando visão de negócio e jornada do cliente, NÃO aspectos técnicos e crie a maior quantidade de testes possiveis e aplique tecnicas de testes avançadas.
-              Com base na análise da user story abaixo, avalie também o cenário de teste fornecido e realize as seguintes ações:
-                    1. Classifique o tipo do teste fornecido: **funcional, integração ou end-to-end**.  
-                    2. Avalie se o cenário cobre o comportamento esperado da user story.  
-                    3. Aponte se há pontos técnicos ou termos inadequados para testes de aceitação.  
-                    4. Reescreva o cenário utilizando **boas práticas do Gherkin com as palavras-chave em inglês** (Scenario, Given, And, When, Then)mantendo o cenário em portugues**, evitando qualquer linguagem técnica ou de implementação (como Postman, status HTTP, payloads, tabelas do banco, etc). 
-                      ⚠️ O novo cenário **deve obrigatoriamente estar dentro de um bloco de código com a tag \`\`\`gherkin** no início e \`\`\` no final**, como no exemplo abaixo:
-                      \`\`\`gherkin
-                      Scenario: Exemplo
-                      Given que o usuário acessa a tela de login
-                      When ele insere um e-mail válido
-                      Then ele deve receber um e-mail de redefinição de senha
-                      \`\`\`  
-                    5. O novo cenário (apenas 1 cenário) deve estar orientado a **comportamento do usuário** ou do sistema, com clareza, valor de negócio e sem ambiguidade.
-                    ---
-                    📝 **User Story Analisada:** ${userStory}
-                    ---
-                    🧪 **Cenário de Teste Original:** ${cenarioOriginal}`,
-            intent: 'conversation',
-            references: [],
-            context: [],
-            currentURL: 'https://github.com/copilot/c/f7d5070e-bbdc-4a40-a844-f8625f316c1a',
-            streaming: false,
-            confirmations: [],
-            customInstructions: [],
-            model: 'gpt-4.1',
-            mode: 'immersive',
-            parentMessageID: crypto.randomUUID(),
-            tools: [],
-            mediaContent: [],
-            skillOptions: { deepCodeSearch: false }
-        };
-        const sendMsgRes = yield (0, node_fetch_1.default)(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
-            method: 'POST',
-            headers: {
-                'authorization': `GitHub-Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload)
-        });
-        if (!sendMsgRes.ok) {
-            throw new Error(`Erro ao enviar cenário: ${sendMsgRes.status}`);
-        }
-        yield new Promise(r => setTimeout(r, 1000));
-        const messagesRes = yield (0, node_fetch_1.default)(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
-            method: 'GET',
-            headers: {
-                'authorization': `GitHub-Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-        });
-        const messagesData = yield messagesRes.json();
-        const ultimaResposta = ((_b = (_a = messagesData === null || messagesData === void 0 ? void 0 : messagesData.messages) === null || _a === void 0 ? void 0 : _a[messagesData.messages.length - 1]) === null || _b === void 0 ? void 0 : _b.content) || '⚠️ Nenhuma resposta recebida.';
-        const messagesLength = (_d = (_c = messagesData === null || messagesData === void 0 ? void 0 : messagesData.messages) === null || _c === void 0 ? void 0 : _c[messagesData.messages.length - 1]) === null || _d === void 0 ? void 0 : _d.content;
-        console.log('🔍 Copilot messagesData:', messagesLength);
-        return ultimaResposta;
-    });
-}
-function analiseStoryEpicFunCopilot(token, threadId, description, bdd) {
-    var _a, _b, _c, _d;
-    return __awaiter(this, void 0, void 0, function* () {
-        const payload = {
-            responseMessageID: crypto.randomUUID(),
-            content: `Você é um analista de QA funcional. Avalie a user story a seguir priorizando visão de negócio e jornada do cliente, NÃO aspectos técnicos.
-
-              INSTRUÇÕES IMPORTANTES (SIGA À RISCA):
-              - Se a descrição for predominantemente técnica (ex.: APIs, payload, status HTTP, banco, headers, microserviços, JSON, SQL, Postman) e não houver **regras de negócio** e **pré-condições** claras, você DEVE:
-                • Atribuir notas BAIXAS (máx. 2/5) para: "Clareza de requisitos funcionais", "Visão centrada no cliente", "Viabilidade de extração de cenários" e INVEST (V - Valiosa e T - Testável).  
-                • Classificar como "Precisa de refinamento" no parecer, explicitando as lacunas.
-              - Critérios de aceite DEVEM ser **funcionais**, em linguagem de negócio e **orientados à jornada/experiência do usuário**.  
-                • PROIBIDO mencionar termos técnicos (HTTP, 200/400/500, payload, JSON, API, endpoint, banco, tabela, schema, Kafka etc.).  
-                • Foque em estados do sistema perceptíveis pelo usuário, regras de elegibilidade, mensagens e comportamentos.
-              - Se houver BDD, avalie a coerência com o negócio; se estiver técnico, proponha versão funcional.
-              - Escreva toda a resposta em **português (Brasil)**.
-              
-              Analise a seguinte user story extraída do Jira e classifique-a de acordo com os seguintes critérios:
-              1. Clareza e detalhamento dos requisitos funcionais
-              2. Presença de objetivos e visão centrada no cliente
-              3. Viabilidade de extração de cenários de testes funcionais e E2E com base na descrição fornecida
-              Ao realizar a análise, considere também os princípios do padrão INVEST (Independente, Negociável, Valiosa, Estimável, Pequena e Testável) e a aderência, quando aplicável, à estrutura do framework BDD (Behavior-Driven Development), com foco em comportamento esperado do sistema.
-              Para cada critério, atribua uma nota de 1 a 5 e explique brevemente o motivo da nota.
-              Em seguida, indique se essa user story está pronta para desenvolvimento e testes ou se precisa de refinamento.
-              Finalize com uma classificação geral da story como:
-              ótima, boa, regular ou ruim (sem explicações nesta parte).
-              Por fim, com base em sua análise, forneça **uma sugestão de melhoria para a escrita da user story**. A nova versão deve ser clara, objetiva, orientada a valor de negócio, e — quando possível — escrita no formato BDD ou estruturada com clareza para testes.
-              Aqui está a user story a ser analisada:
-              \n\nDescrição:\n${description}\n\nBDD:\n${bdd}`,
-            intent: 'conversation',
-            references: [],
-            context: [],
-            currentURL: 'https://github.com/copilot/c/f7d5070e-bbdc-4a40-a844-f8625f316c1a',
-            streaming: false,
-            confirmations: [],
-            customInstructions: [],
-            model: 'gpt-4.1',
-            mode: 'immersive',
-            parentMessageID: crypto.randomUUID(),
-            tools: [],
-            mediaContent: [],
-            skillOptions: { deepCodeSearch: false }
-        };
-        const sendMsgRes = yield (0, node_fetch_1.default)(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
-            method: 'POST',
-            headers: {
-                'authorization': `GitHub-Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload)
-        });
-        if (!sendMsgRes.ok) {
-            throw new Error(`Erro ao enviar cenário: ${sendMsgRes.status}`);
-        }
-        yield new Promise(r => setTimeout(r, 1000));
-        const messagesRes = yield (0, node_fetch_1.default)(`https://api.business.githubcopilot.com/github/chat/threads/${threadId}/messages`, {
-            method: 'GET',
-            headers: {
-                'authorization': `GitHub-Bearer ${token}`,
-                'Content-Type': 'application/json',
-            },
-        });
-        const messagesData = yield messagesRes.json();
-        const ultimaResposta = ((_b = (_a = messagesData === null || messagesData === void 0 ? void 0 : messagesData.messages) === null || _a === void 0 ? void 0 : _a[messagesData.messages.length - 1]) === null || _b === void 0 ? void 0 : _b.content) || '⚠️ Nenhuma resposta recebida.';
-        const messagesLength = (_d = (_c = messagesData === null || messagesData === void 0 ? void 0 : messagesData.messages) === null || _c === void 0 ? void 0 : _c[messagesData.messages.length - 1]) === null || _d === void 0 ? void 0 : _d.content;
-        console.log('🔍 Copilot messagesData:', messagesLength);
-        return ultimaResposta;
-    });
-}
 function getJiraSettings() {
     return {
         jiraDomain: vscode.workspace.getConfiguration().get('plugin.jira.domain') || '',
         jiraEmail: vscode.workspace.getConfiguration().get('plugin.jira.email') || '',
         jiraToken: vscode.workspace.getConfiguration().get('plugin.jira.token') || '',
+        jiraProjectCategoryId: vscode.workspace.getConfiguration().get('plugin.jira.projectCategoryId') || '',
     };
 }
 function getZephyrSettings() {
@@ -1036,11 +983,6 @@ function getZephyrSettings() {
         zephyrOwnerId: vscode.workspace.getConfiguration().get('plugin.zephyr.ownerId') || '',
         zephyrDomain: vscode.workspace.getConfiguration().get('plugin.zephyr.domain') || '',
         zephyrToken: vscode.workspace.getConfiguration().get('plugin.zephyr.token') || '',
-    };
-}
-function getCopilotSettings() {
-    return {
-        copilotCookie: vscode.workspace.getConfiguration().get('plugin.copilot.Cookie') || '',
     };
 }
 function encodeAuth(email, token) {

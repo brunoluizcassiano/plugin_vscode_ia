@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 import { getHomeViewContent } from './view/homeView';
+
 export class HomeViewProvider implements vscode.WebviewViewProvider {
     constructor(private readonly extensionUri: vscode.Uri) { }
+
     public resolveWebviewView(
         webviewView: vscode.WebviewView,
         context: vscode.WebviewViewResolveContext,
@@ -11,9 +13,10 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
             enableScripts: true,
             localResourceRoots: [this.extensionUri],
         };
+
         webviewView.webview.html = getHomeViewContent();
         webviewView.webview.onDidReceiveMessage(async (message: { command?: string; type?: string; destino?: string }) => {
-            // Trata o botão "Jira"
+            // Trata o botao "Jira"
             if (message.command === 'openJira') {
                 vscode.commands.executeCommand('plugin-vscode.openJira');
                 return;
@@ -27,6 +30,7 @@ export class HomeViewProvider implements vscode.WebviewViewProvider {
                 vscode.commands.executeCommand('plugin-vscode.settings');
                 return;
             }
+
             if (message.type === 'navegar') {
                 switch (message.destino) {
                     case 'formulario':

@@ -1,10 +1,11 @@
 {
-    "name": "form-plugin",
-    "displayName": "Form Plugin",
-    "description": "Exibe um formulário dentro do VSCode",
-    "version": "0.0.1",
+    "name": "f1rst-vscode-extension",
+    "publisher": "f1rst",
+    "displayName": "VS Code quality plugin for Jira and Zephyr",
+    "description": "Integra o VS Code ao Jira e Zephyr: painel com autocomplete de issues (Functionality/Epic/Story), detalhes e comentários no Jira, criação/atualização de testes no Zephyr e análises QA via GitHub Copilot.",
+    "version": "1.0.2",
     "engines": {
-        "vscode": "^1.70.0"
+        "vscode": "^1.95.0"
     },
     "main": "./out/extension.js",
     "activationEvents": [
@@ -13,7 +14,7 @@
     ],
     "contributes": {
         "configuration": {
-            "title": "Form Plugin",
+            "title": "Plugin COE PLARD",
             "properties": {
                 "plugin.jira.domain": {
                     "type": "string",
@@ -30,6 +31,26 @@
                     "default": "",
                     "description": "Token do Jira (texto plano)"
                 },
+                "plugin.jira.projectCategoryId": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Category ID para filtrar projetos do Jira. Deixe vazio para listar todos os projetos."
+                },
+                "plugin.ai.provider": {
+                    "type": "string",
+                    "default": "auto",
+                    "description": "Vendor/provider de IA selecionado a partir dos modelos disponíveis via vscode.lm."
+                },
+                "plugin.ai.vendor": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Vendor customizado para busca de modelos via vscode.lm, quando provider=custom ou auto."
+                },
+                "plugin.ai.modelFamily": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Family/modelo preferido para busca via vscode.lm. Deixe vazio para usar o primeiro modelo disponível do provider."
+                },
                 "plugin.zephyr.ownerId": {
                     "type": "string",
                     "default": "",
@@ -45,10 +66,21 @@
                     "default": "",
                     "description": "Token do Zephyr Scale (texto plano)"
                 },
-                "plugin.copilot.Cookie": {
-                    "type": "string",
-                    "default": "",
-                    "description": "Cookie do Copilot (texto plano)"
+                "plugin.projectMap": {
+                    "type": "object",
+                    "default": {},
+                    "description": "Jira → Zephyr (ex.: { \"TBTX\": \"SQTC\" })"
+                },
+                "plugin.projectMap.strict": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Exigir de/para para todos os projetos"
+                }
+            ,
+                "plugin.openOnStart": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Se true, a view do plugin será aberta/focada automaticamente quando o VS Code iniciar. Desative para evitar que o plugin \"pule\" ao abrir o editor."
                 }
             }
         },
@@ -98,8 +130,6 @@
         "package": "vsce package"
     },
     "dependencies": {
-        "http-proxy-agent": "^7.0.2",
-        "https-proxy-agent": "^7.0.6",
         "js-beautify": "^1.15.4",
         "js-yaml": "^4.1.0",
         "node-fetch": "^2.7.0"

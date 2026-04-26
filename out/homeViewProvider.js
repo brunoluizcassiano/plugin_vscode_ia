@@ -46,7 +46,7 @@ class HomeViewProvider {
         };
         webviewView.webview.html = (0, homeView_1.getHomeViewContent)();
         webviewView.webview.onDidReceiveMessage((message) => __awaiter(this, void 0, void 0, function* () {
-            // Trata o botão "Jira"
+            // Trata o botao "Jira"
             if (message.command === 'openJira') {
                 vscode.commands.executeCommand('plugin-vscode.openJira');
                 return;

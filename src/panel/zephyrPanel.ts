@@ -100,9 +100,9 @@ export class ZephyrPanel {
     const webview = this._panel.webview;
 
     // Gera URIs seguros para os assets da webview
-    const styleUri  = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'view', 'style', 'style.css'));
+    const styleUri  = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'style', 'style.css'));
     // Opcional: se mover o JS inline para arquivo externo
-    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'src', 'view', 'zephyr', 'zephyr.js'));
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'zephyr', 'zephyr.js'));
     const nonce = getNonce();
 
     // Passa os URIs/nonce para a view (ajuste a assinatura de getZephyrViewContent)
@@ -474,10 +474,8 @@ export class ZephyrPanel {
         enableScripts: true,
         retainContextWhenHidden: true, // preserva DOM/JS ao trocar de aba
         localResourceRoots: [
-          vscode.Uri.joinPath(extensionUri, 'src', 'view', 'style'),
-          vscode.Uri.joinPath(extensionUri, 'src', 'view', 'zephyr'),
-          vscode.Uri.joinPath(extensionUri, 'media'), // se no futuro mover assets para /media
-          vscode.Uri.joinPath(extensionUri, 'out'),   // se gerar bundles
+          vscode.Uri.joinPath(extensionUri, 'media'),
+          vscode.Uri.joinPath(extensionUri, 'out'),
         ],
       }
     );
