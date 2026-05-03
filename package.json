@@ -8,10 +8,13 @@
         "vscode": "^1.95.0"
     },
     "main": "./out/extension.js",
-    "activationEvents": [
-        "*",
-        "onView:homeView"
-    ],
+        "activationEvents": [
+            "*",
+            "onView:homeView",
+            "onView:qualityArtifactsView",
+            "onView:qualityTestsView",
+            "onView:qualityProjectStatusView"
+        ],
     "contributes": {
         "configuration": {
             "title": "Plugin COE PLARD",
@@ -59,7 +62,7 @@
                 "plugin.ai.devinApiKey": {
                     "type": "string",
                     "default": "",
-                    "description": "API Key do Devin Enterprise (começa com apk_user_). Gere em Settings → API Keys."
+                    "description": "API Key do Devin Enterprise (começa com apk_user_). Gere em Settings -> API Keys."
                 },
                 "plugin.zephyr.ownerId": {
                     "type": "string",
@@ -79,7 +82,7 @@
                 "plugin.projectMap": {
                     "type": "object",
                     "default": {},
-                    "description": "Jira → Zephyr (ex.: { \"TBTX\": \"SQTC\" })"
+                    "description": "Jira -> Zephyr (ex.: { \"TBTX\": \"SQTC\" })"
                 },
                 "plugin.projectMap.strict": {
                     "type": "boolean",
@@ -89,7 +92,7 @@
                 "plugin.openOnStart": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Se true, a view do plugin será aberta/focada automaticamente quando o VS Code iniciar. Desative para evitar que o plugin \"pule\" ao abrir o editor."
+                    "description": "Se true, a view do plugin será aberta/focada automaticamente quando o VS Code iniciar. Desative para evitar que o plugin pule ao abrir o editor."
                 }
             }
         },
@@ -100,7 +103,7 @@
             },
             {
                 "command": "plugin-vscode.getJiraUser",
-                "title": "Obter Usuário Jira"
+                "title": "Obter usuário Jira"
             },
             {
                 "command": "plugin-vscode.openZephyr",
@@ -111,12 +114,38 @@
                 "title": "Abrir Backend"
             },
             {
+                "command": "plugin-vscode.openWebFlow",
+                "title": "Abrir Automação Web"
+            },
+            {
                 "command": "plugin-vscode.settings",
-                "title": "Abrir Backend"
+                "title": "Abrir configurações"
             },
             {
                 "command": "plugin-vscode.refreshGitHubSession",
                 "title": "Entrar no GitHub"
+            },
+            {
+                "command": "plugin-vscode.refreshArtifacts",
+                "title": "Atualizar artefatos"
+            },
+            {
+                "command": "plugin-vscode.refreshTests",
+                "title": "Atualizar testes"
+            },
+            {
+                "command": "plugin-vscode.cypressOpen",
+                "title": "Cypress Open",
+                "icon": "$(beaker)"
+            },
+            {
+                "command": "plugin-vscode.cypressRun",
+                "title": "Cypress Run",
+                "icon": "$(play)"
+            },
+            {
+                "command": "plugin-vscode.refreshProjectStatus",
+                "title": "Atualizar projeto"
             }
         ],
         "viewsContainers": {
@@ -132,8 +161,48 @@
             "formSidebar": [
                 {
                     "id": "homeView",
-                    "name": "Início",
-                    "type": "webview"
+                    "name": "Início"
+                },
+                {
+                    "id": "qualityArtifactsView",
+                    "name": "Artefatos"
+                },
+                {
+                    "id": "qualityTestsView",
+                    "name": "Testes"
+                },
+                {
+                    "id": "qualityProjectStatusView",
+                    "name": "Projeto"
+                }
+            ]
+        },
+        "menus": {
+            "view/title": [
+                {
+                    "command": "plugin-vscode.refreshArtifacts",
+                    "when": "view == qualityArtifactsView",
+                    "group": "navigation"
+                },
+                {
+                    "command": "plugin-vscode.cypressOpen",
+                    "when": "view == qualityTestsView",
+                    "group": "navigation@1"
+                },
+                {
+                    "command": "plugin-vscode.cypressRun",
+                    "when": "view == qualityTestsView",
+                    "group": "navigation@2"
+                },
+                {
+                    "command": "plugin-vscode.refreshTests",
+                    "when": "view == qualityTestsView",
+                    "group": "navigation@3"
+                },
+                {
+                    "command": "plugin-vscode.refreshProjectStatus",
+                    "when": "view == qualityProjectStatusView",
+                    "group": "navigation"
                 }
             ]
         }

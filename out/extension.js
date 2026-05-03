@@ -38,12 +38,16 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.activate = void 0;
 const node_fetch_1 = __importDefault(require("node-fetch"));
 const vscode = __importStar(require("vscode"));
-const homeViewProvider_1 = require("./view/home/homeViewProvider");
+const homeActionsProvider_1 = require("./view/home/homeActionsProvider");
 const jiraPanel_1 = require("./panel/jiraPanel");
 const zephyrPanel_1 = require("./panel/zephyrPanel");
 const backendPanel_1 = require("./panel/backendPanel");
 const settingsPanel_1 = require("./panel/settingsPanel");
 const languageModelBridge_1 = require("./ai/model/languageModelBridge");
+const artifactsTreeProvider_1 = require("./view/project/artifactsTreeProvider");
+const projectStatusProvider_1 = require("./view/project/projectStatusProvider");
+const cypressTestsProvider_1 = require("./view/project/cypressTestsProvider");
+const cypressProject_1 = require("./view/project/cypressProject");
 const prompts_1 = require("./ai/prompts");
 let globalToken = null;
 let globalThreadId = null;
@@ -240,15 +244,41 @@ function withProjectParam(baseUrl, project) {
         url.searchParams.set('projectKey', project.zephyrKey);
     return url.toString();
 }
+function runCypressTerminal(command) {
+    const root = (0, cypressProject_1.findCypressProjectRoot)();
+    if (!root) {
+        vscode.window.showWarningMessage('Nenhum projeto Cypress encontrado no workspace.');
+        return;
+    }
+    const terminal = vscode.window.createTerminal({
+        name: command === 'open' ? 'Cypress Open' : 'Cypress Run',
+        cwd: root,
+    });
+    terminal.show();
+    terminal.sendText(`npx cypress ${command}`);
+}
 function activate(context) {
     return __awaiter(this, void 0, void 0, function* () {
         console.log('✅ Plugin "Form Plugin" está sendo ativado...');
-        // Criação da instância da HomeViewProvider
-        const homeViewProvider = new homeViewProvider_1.HomeViewProvider(context.extensionUri);
-        // Registro da webview com o ID que deve coincidir com o package.json
-        context.subscriptions.push(vscode.window.registerWebviewViewProvider('homeView', // << TEM QUE BATER COM O ID DO `package.json`
-        homeViewProvider));
-        console.log('✅ HomeViewProvider registrada.');
+        const homeActionsProvider = new homeActionsProvider_1.HomeActionsProvider();
+        const artifactsTreeProvider = new artifactsTreeProvider_1.ArtifactsTreeProvider();
+        const cypressTestsProvider = new cypressTestsProvider_1.CypressTestsProvider();
+        const projectStatusProvider = new projectStatusProvider_1.ProjectStatusProvider();
+        context.subscriptions.push(vscode.window.createTreeView('homeView', {
+            treeDataProvider: homeActionsProvider,
+        }), vscode.window.createTreeView('qualityArtifactsView', {
+            treeDataProvider: artifactsTreeProvider,
+            showCollapseAll: true,
+        }), vscode.window.createTreeView('qualityTestsView', {
+            treeDataProvider: cypressTestsProvider,
+            showCollapseAll: true,
+        }), vscode.window.createTreeView('qualityProjectStatusView', {
+            treeDataProvider: projectStatusProvider,
+            showCollapseAll: true,
+        }), vscode.commands.registerCommand('plugin-vscode.refreshArtifacts', () => artifactsTreeProvider.refresh()), vscode.commands.registerCommand('plugin-vscode.refreshTests', () => cypressTestsProvider.refresh()), vscode.commands.registerCommand('plugin-vscode.cypressOpen', () => runCypressTerminal('open')), vscode.commands.registerCommand('plugin-vscode.cypressRun', () => runCypressTerminal('run')), vscode.commands.registerCommand('plugin-vscode.refreshProjectStatus', () => projectStatusProvider.refresh()));
+        void cypressTestsProvider.refresh();
+        void projectStatusProvider.refresh();
+        console.log('✅ Views do QE Studio registradas.');
         // === GitHub Login: identifica somente quando Copilot estiver selecionado
         void identifyGitHubOnStartup(context);
         // Observa mudanças na sessão do GitHub (login/logout em outro lugar)
@@ -283,6 +313,14 @@ function activate(context) {
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.backend', () => {
             backendPanel_1.BackendPanel.createOrShow(context.extensionUri);
         }));
+        context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.openWebFlow', () => __awaiter(this, void 0, void 0, function* () {
+            try {
+                yield vscode.commands.executeCommand('webTopicsView.focus');
+            }
+            catch (_a) {
+                vscode.window.showInformationMessage('Fluxo Web ainda não possui uma visão registrada.');
+            }
+        })));
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.settings', () => {
             settingsPanel_1.SettingsPanel.createOrShow(context.extensionUri);
         }));
@@ -422,7 +460,7 @@ function activate(context) {
         })));
         // Novo comando: buscar detalhes completos da issue
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.getJiraIssue', (issueKey) => __awaiter(this, void 0, void 0, function* () {
-            var _a, _b, _c;
+            var _b, _c, _d;
             const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
             const { zephyrDomain, zephyrToken } = getZephyrSettings();
             const auth = encodeAuth(jiraEmail, jiraToken);
@@ -452,9 +490,9 @@ function activate(context) {
                     summary: data.fields.summary,
                     description: data.fields.description,
                     bddSpecification: data.fields.customfield_10553,
-                    status: ((_a = data.fields.status) === null || _a === void 0 ? void 0 : _a.name) || 'Sem status',
-                    assignee: ((_b = data.fields.assignee) === null || _b === void 0 ? void 0 : _b.displayName) || 'Não atribuído',
-                    reporter: ((_c = data.fields.reporter) === null || _c === void 0 ? void 0 : _c.displayName) || 'Desconhecido',
+                    status: ((_b = data.fields.status) === null || _b === void 0 ? void 0 : _b.name) || 'Sem status',
+                    assignee: ((_c = data.fields.assignee) === null || _c === void 0 ? void 0 : _c.displayName) || 'Não atribuído',
+                    reporter: ((_d = data.fields.reporter) === null || _d === void 0 ? void 0 : _d.displayName) || 'Desconhecido',
                     attachments: (data.fields.attachment || []).map((att) => ({
                         filename: att.filename,
                         url: att.content
@@ -640,9 +678,9 @@ function activate(context) {
         // Lista os testes de uma pasta do Zephyr (sem recursão por padrão)
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.getZephyrTestsByFolder', (projectKey, folderId, opts // pode expandir se quiser recursion mais tarde
         ) => __awaiter(this, void 0, void 0, function* () {
-            var _d, _e, _f;
+            var _e, _f, _g;
             const { zephyrToken, zephyrDomain } = getZephyrSettings();
-            const maxResults = (_d = opts === null || opts === void 0 ? void 0 : opts.maxResults) !== null && _d !== void 0 ? _d : 100;
+            const maxResults = (_e = opts === null || opts === void 0 ? void 0 : opts.maxResults) !== null && _e !== void 0 ? _e : 100;
             // ✅ Resolve via de/para; se faltar, pergunta ao usuário
             const project = yield resolveProjectOrPrompt('Listar pastas', projectKey);
             if (!project || !folderId) {
@@ -728,7 +766,7 @@ function activate(context) {
                 }
                 out.push({
                     key,
-                    version: (_f = (_e = t.version) !== null && _e !== void 0 ? _e : details === null || details === void 0 ? void 0 : details.version) !== null && _f !== void 0 ? _f : 1,
+                    version: (_g = (_f = t.version) !== null && _f !== void 0 ? _f : details === null || details === void 0 ? void 0 : details.version) !== null && _g !== void 0 ? _g : 1,
                     details,
                     script
                 });
@@ -738,7 +776,7 @@ function activate(context) {
         })));
         // Novo comando: buscar detalhes completos da issue
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.getJiraIssueDetails', (issueKey) => __awaiter(this, void 0, void 0, function* () {
-            var _g, _h, _j;
+            var _h, _j, _k;
             const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
             const { zephyrToken, zephyrDomain } = getZephyrSettings();
             const auth = encodeAuth(jiraEmail, jiraToken);
@@ -817,9 +855,9 @@ function activate(context) {
                     summary: data.fields.summary,
                     description: data.fields.description,
                     bddSpecification: data.fields.customfield_10553,
-                    status: ((_g = data.fields.status) === null || _g === void 0 ? void 0 : _g.name) || 'Sem status',
-                    assignee: ((_h = data.fields.assignee) === null || _h === void 0 ? void 0 : _h.displayName) || 'Não atribuído',
-                    reporter: ((_j = data.fields.reporter) === null || _j === void 0 ? void 0 : _j.displayName) || 'Desconhecido',
+                    status: ((_h = data.fields.status) === null || _h === void 0 ? void 0 : _h.name) || 'Sem status',
+                    assignee: ((_j = data.fields.assignee) === null || _j === void 0 ? void 0 : _j.displayName) || 'Não atribuído',
+                    reporter: ((_k = data.fields.reporter) === null || _k === void 0 ? void 0 : _k.displayName) || 'Desconhecido',
                     attachments: (data.fields.attachment || []).map((att) => ({
                         filename: att.filename,
                         url: att.content

@@ -426,6 +426,9 @@ class ZephyrPanel {
                     tribeName: tribeName,
                     extraTags: extraTags
                 });
+                void vscode.commands.executeCommand('plugin-vscode.refreshArtifacts');
+                void vscode.commands.executeCommand('plugin-vscode.refreshTests');
+                void vscode.commands.executeCommand('plugin-vscode.refreshProjectStatus');
                 // Envie para a Webview
                 panel.webview.postMessage({
                     type: "steps:report",

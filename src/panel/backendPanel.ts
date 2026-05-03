@@ -160,6 +160,9 @@ export class BackendPanel {
       } else {
         vscode.window.showWarningMessage('Tipo não reconhecido no formulário.');
       }
+      void vscode.commands.executeCommand('plugin-vscode.refreshArtifacts');
+      void vscode.commands.executeCommand('plugin-vscode.refreshTests');
+      void vscode.commands.executeCommand('plugin-vscode.refreshProjectStatus');
     } catch (error: any) {
       vscode.window.showErrorMessage(`Erro ao processar formulário: ${error.message}`);
     }

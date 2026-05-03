@@ -1,11 +1,15 @@
 import fetch from 'node-fetch';
 import * as vscode from 'vscode';
-import { HomeViewProvider } from './view/home/homeViewProvider';
+import { HomeActionsProvider } from './view/home/homeActionsProvider';
 import { JiraPanel } from './panel/jiraPanel';
 import { ZephyrPanel } from './panel/zephyrPanel';
 import { BackendPanel } from './panel/backendPanel';
 import { SettingsPanel } from './panel/settingsPanel';
 import { askLanguageModel } from './ai/model/languageModelBridge';
+import { ArtifactsTreeProvider } from './view/project/artifactsTreeProvider';
+import { ProjectStatusProvider } from './view/project/projectStatusProvider';
+import { CypressTestsProvider } from './view/project/cypressTestsProvider';
+import { findCypressProjectRoot } from './view/project/cypressProject';
 
 import {
   buildAnaliseStoryEpicFunPrompt,
@@ -228,21 +232,55 @@ function withProjectParam(baseUrl: string, project: { zephyrKey: string; zephyrP
  return url.toString();
 }
 
+function runCypressTerminal(command: 'open' | 'run') {
+  const root = findCypressProjectRoot();
+  if (!root) {
+    vscode.window.showWarningMessage('Nenhum projeto Cypress encontrado no workspace.');
+    return;
+  }
+
+  const terminal = vscode.window.createTerminal({
+    name: command === 'open' ? 'Cypress Open' : 'Cypress Run',
+    cwd: root,
+  });
+  terminal.show();
+  terminal.sendText(`npx cypress ${command}`);
+}
+
 export async function activate(context: vscode.ExtensionContext) {
   console.log('✅ Plugin "Form Plugin" está sendo ativado...');
 
-  // Criação da instância da HomeViewProvider
-  const homeViewProvider = new HomeViewProvider(context.extensionUri);
+  const homeActionsProvider = new HomeActionsProvider();
+  const artifactsTreeProvider = new ArtifactsTreeProvider();
+  const cypressTestsProvider = new CypressTestsProvider();
+  const projectStatusProvider = new ProjectStatusProvider();
   
-  // Registro da webview com o ID que deve coincidir com o package.json
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(
-      'homeView', // << TEM QUE BATER COM O ID DO `package.json`
-      homeViewProvider
-    )
+    vscode.window.createTreeView('homeView', {
+      treeDataProvider: homeActionsProvider,
+    }),
+    vscode.window.createTreeView('qualityArtifactsView', {
+      treeDataProvider: artifactsTreeProvider,
+      showCollapseAll: true,
+    }),
+    vscode.window.createTreeView('qualityTestsView', {
+      treeDataProvider: cypressTestsProvider,
+      showCollapseAll: true,
+    }),
+    vscode.window.createTreeView('qualityProjectStatusView', {
+      treeDataProvider: projectStatusProvider,
+      showCollapseAll: true,
+    }),
+    vscode.commands.registerCommand('plugin-vscode.refreshArtifacts', () => artifactsTreeProvider.refresh()),
+    vscode.commands.registerCommand('plugin-vscode.refreshTests', () => cypressTestsProvider.refresh()),
+    vscode.commands.registerCommand('plugin-vscode.cypressOpen', () => runCypressTerminal('open')),
+    vscode.commands.registerCommand('plugin-vscode.cypressRun', () => runCypressTerminal('run')),
+    vscode.commands.registerCommand('plugin-vscode.refreshProjectStatus', () => projectStatusProvider.refresh())
   );
+  void cypressTestsProvider.refresh();
+  void projectStatusProvider.refresh();
 
-  console.log('✅ HomeViewProvider registrada.');
+  console.log('✅ Views do QE Studio registradas.');
   // === GitHub Login: identifica somente quando Copilot estiver selecionado
   void identifyGitHubOnStartup(context);
   // Observa mudanças na sessão do GitHub (login/logout em outro lugar)
@@ -286,6 +324,16 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('plugin-vscode.backend', () => {
       BackendPanel.createOrShow(context.extensionUri);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('plugin-vscode.openWebFlow', async () => {
+      try {
+        await vscode.commands.executeCommand('webTopicsView.focus');
+      } catch {
+        vscode.window.showInformationMessage('Fluxo Web ainda não possui uma visão registrada.');
+      }
     })
   );
 
