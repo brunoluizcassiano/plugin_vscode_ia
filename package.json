@@ -3,7 +3,7 @@
     "publisher": "f1rst",
     "displayName": "VS Code quality plugin for Jira and Zephyr",
     "description": "Integra o VS Code ao Jira e Zephyr: painel com autocomplete de issues (Functionality/Epic/Story), detalhes e comentários no Jira, criação/atualização de testes no Zephyr e análises QA via GitHub Copilot.",
-    "version": "1.0.2",
+    "version": "1.1.0",
     "engines": {
         "vscode": "^1.95.0"
     },
@@ -51,6 +51,16 @@
                     "default": "",
                     "description": "Family/modelo preferido para busca via vscode.lm. Deixe vazio para usar o primeiro modelo disponível do provider."
                 },
+                "plugin.ai.devinOrgSlug": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Slug da organização no Devin Enterprise. Ex.: sei-software-engineering-intelligence"
+                },
+                "plugin.ai.devinApiKey": {
+                    "type": "string",
+                    "default": "",
+                    "description": "API Key do Devin Enterprise (começa com apk_user_). Gere em Settings → API Keys."
+                },
                 "plugin.zephyr.ownerId": {
                     "type": "string",
                     "default": "",
@@ -75,8 +85,7 @@
                     "type": "boolean",
                     "default": false,
                     "description": "Exigir de/para para todos os projetos"
-                }
-            ,
+                },
                 "plugin.openOnStart": {
                     "type": "boolean",
                     "default": false,
@@ -104,13 +113,17 @@
             {
                 "command": "plugin-vscode.settings",
                 "title": "Abrir Backend"
+            },
+            {
+                "command": "plugin-vscode.refreshGitHubSession",
+                "title": "Entrar no GitHub"
             }
         ],
         "viewsContainers": {
             "activitybar": [
                 {
                     "id": "formSidebar",
-                    "title": "COE QUALIDADE PLARD - AGENT",
+                    "title": "QE Studio",
                     "icon": "media/icon.svg"
                 }
             ]

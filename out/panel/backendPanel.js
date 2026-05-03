@@ -34,15 +34,32 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BackendPanel = void 0;
 const vscode = __importStar(require("vscode"));
-const backendViewForm_1 = require("../view/backendViewForm");
+const backendViewForm_1 = require("../view/backend/backendViewForm");
 const schema_1 = require("../generators/schema/schema");
 const index_1 = require("../generators/app/index");
 const index_2 = require("../generators/model/index");
 const generateFromCurl_1 = require("../generators/api/generateFromCurl");
+function getNonce() {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++)
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    return text;
+}
 class BackendPanel {
-    constructor(panel) {
+    constructor(panel, extensionUri) {
         this.panel = panel;
-        this.panel.webview.html = (0, backendViewForm_1.getBackendviewContent)();
+        this.extensionUri = extensionUri;
+        const webview = this.panel.webview;
+        const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'style', 'style.css'));
+        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'backend', 'backend.js'));
+        const nonce = getNonce();
+        this.panel.webview.html = (0, backendViewForm_1.getBackendviewContent)({
+            webview,
+            nonce,
+            styleUri: String(styleUri),
+            scriptUri: String(scriptUri)
+        });
         this.registerMessageHandlers();
         this.panel.onDidDispose(() => {
             BackendPanel.currentPanel = undefined;
@@ -54,7 +71,7 @@ class BackendPanel {
             return;
         }
         const panel = vscode.window.createWebviewPanel('backendview', 'Backend', vscode.ViewColumn.One, { enableScripts: true, localResourceRoots: [extensionUri] });
-        BackendPanel.currentPanel = new BackendPanel(panel);
+        BackendPanel.currentPanel = new BackendPanel(panel, extensionUri);
     }
     registerMessageHandlers() {
         this.panel.webview.onDidReceiveMessage((message) => __awaiter(this, void 0, void 0, function* () {

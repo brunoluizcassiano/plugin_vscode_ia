@@ -4,10 +4,6 @@ export type CriarCenariosInput = {
   userStory: string;
 };
 
-/**
- * Prompt: criar vários cenários com classificação (Test Type/Class/Group) e Gherkin.
- * Origem: função enviarCriarCenarioComCopilot (extension.ts).
- */
 export function buildCriarCenariosPrompt(input: CriarCenariosInput): string {
   const userStory = cleanText(input.userStory);
 
@@ -36,6 +32,34 @@ Com base na análise da user story abaixo, crie cenários de testes e realize as
 7. O novo cenário deve estar orientado a **comportamento do usuário** ou do sistema, com clareza, valor de negócio e sem ambiguidade.
 
 ---
+
+FORMATO DE RESPOSTA (OBRIGATÓRIO)
+- Responda APENAS com um JSON válido.
+- NÃO use Markdown.
+- NÃO use texto fora do JSON.
+- Retorne uma lista com a maior quantidade de cenários possível (sem inventar regras que não estejam na user story; quando faltar informação, use placeholders "[definir ...]").
+- O campo "gherkin" deve conter obrigatoriamente um bloco com \`\`\`gherkin no início e \`\`\` no final (como string).
+- Use exatamente os valores permitidos para Test Type, Test Class e Test Group.
+- Responda somente com o conteúdo raw (texto puro).
+- Não use file blocks, não use markdown, não crie anexos/arquivos.
+
+SCHEMA JSON (OBRIGATÓRIO):
+{
+  "meta": { "versao_schema": "1.0", "idioma": "pt-BR" },
+  "cenarios": [
+    {
+      "titulo": "...",
+      "test_type": "End to End|Regression|Acceptance|UI",
+      "test_class": "Positive|Negative",
+      "test_group": "Backend|Front-End|Desktop",
+      "cobre_user_story": true,
+      "avaliacao_cobertura": "...",
+      "pontos_tecnicos_ou_termos_inadequados": ["..."],
+      "gherkin": "\`\`\`gherkin\\nScenario: ...\\nGiven ...\\nWhen ...\\nThen ...\\n\`\`\`"
+    }
+  ]
+}
+
 &#x1f4dd; **User Story Analisada:**
 ${userStory}
 `.trim();

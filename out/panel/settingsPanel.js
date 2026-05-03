@@ -1,82 +1,4 @@
 "use strict";
-// // src/panel/SettingsPanel.ts
-// import * as vscode from 'vscode';
-// import { getSettingsViewContent } from '../view/settingsView';
-// const SETTING_KEYS = [
-//  'plugin.jira.domain',
-//  'plugin.jira.email',
-//  'plugin.jira.token',
-//  'plugin.zephyr.domain',
-//  'plugin.zephyr.token',
-//  'plugin.projectMap',
-//  'plugin.projectMap.strict'
-// ] as const;
-// type SettingsMap = Partial<Record<(typeof SETTING_KEYS)[number], string>>;
-// export class SettingsPanel {
-//  public static currentPanel: SettingsPanel | undefined;
-//  private readonly panel: vscode.WebviewPanel;
-//  private constructor(panel: vscode.WebviewPanel) {
-//    this.panel = panel;
-//    this.panel.webview.html = getSettingsViewContent();
-//    this.registerMessageHandlers();
-//    this.panel.onDidDispose(() => (SettingsPanel.currentPanel = undefined));
-//  }
-//  public static createOrShow(extensionUri: vscode.Uri) {
-//    if (SettingsPanel.currentPanel) {
-//      SettingsPanel.currentPanel.panel.reveal();
-//      return;
-//    }
-//    const panel = vscode.window.createWebviewPanel(
-//      'settingsView',
-//      'Settings',
-//      vscode.ViewColumn.One,
-//      { enableScripts: true }
-//    );
-//    SettingsPanel.currentPanel = new SettingsPanel(panel);
-//  }
-//  // ===== helpers =====
-//  private readAll(): SettingsMap {
-//    const cfg = vscode.workspace.getConfiguration();
-//    const out: SettingsMap = {};
-//    for (const key of SETTING_KEYS) out[key] = cfg.get<string>(key) ?? '';
-//    return out;
-//  }
-//  private async writeAll(values: SettingsMap) {
-//    const cfg = vscode.workspace.getConfiguration();
-//    await Promise.all(
-//      Object.entries(values).map(([key, val]) =>
-//        cfg.update(key, val ?? '', vscode.ConfigurationTarget.Global) // User settings
-//      )
-//    );
-//  }
-//  private post(type: string, payload: any = {}) {
-//    this.panel.webview.postMessage({ type, ...payload });
-//  }
-//  private registerMessageHandlers() {
-//    this.panel.webview.onDidReceiveMessage(async (message: any) => {
-//      try {
-//        if (message.type === 'loadSettings') {
-//          const values = this.readAll();
-//          this.post('currentSettings', { values });
-//          return;
-//        }
-//        if (message.type === 'saveSettings') {
-//          const values = (message.settings ?? {}) as SettingsMap;
-//          await this.writeAll(values);
-//          this.post('status', { message: '✅ Configurações salvas em User settings.' });
-//          return;
-//        }
-//        if (message.type === 'openSettingsJson') {
-//          await vscode.commands.executeCommand('workbench.action.openSettingsJson');
-//          return;
-//        }
-//      } catch (err: any) {
-//        vscode.window.showErrorMessage(`Erro nos settings: ${err?.message || err}`);
-//        this.post('status', { message: '❌ Ocorreu um erro ao processar a ação.' });
-//      }
-//    });
-//  }
-// }
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -112,8 +34,16 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SettingsPanel = void 0;
 const vscode = __importStar(require("vscode"));
-const settingsView_1 = require("../view/settingsView");
-const copilotLmBridge_1 = require("../copilot/copilotLmBridge");
+const settingsView_1 = require("../view/settings/settingsView");
+const languageModelBridge_1 = require("../ai/model/languageModelBridge");
+const hostContext_1 = require("../platform/hostContext");
+function getNonce() {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++)
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    return text;
+}
 const SETTING_KEYS = [
     'plugin.jira.domain',
     'plugin.jira.email',
@@ -122,6 +52,8 @@ const SETTING_KEYS = [
     'plugin.ai.provider',
     'plugin.ai.vendor',
     'plugin.ai.modelFamily',
+    'plugin.ai.devinOrgSlug',
+    'plugin.ai.devinApiKey',
     'plugin.zephyr.ownerId',
     'plugin.zephyr.domain',
     'plugin.zephyr.token',
@@ -129,19 +61,29 @@ const SETTING_KEYS = [
     'plugin.projectMap.strict'
 ];
 class SettingsPanel {
-    constructor(panel) {
+    constructor(panel, extensionUri) {
         this.panel = panel;
-        this.panel.webview.html = (0, settingsView_1.getSettingsViewContent)();
+        this.extensionUri = extensionUri;
+        const webview = this.panel.webview;
+        const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'style', 'style.css'));
+        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'settings', 'settings.js'));
+        const nonce = getNonce();
+        this.panel.webview.html = (0, settingsView_1.getSettingsViewContent)({
+            webview,
+            nonce,
+            styleUri: String(styleUri),
+            scriptUri: String(scriptUri)
+        });
         this.registerMessageHandlers();
         this.panel.onDidDispose(() => (SettingsPanel.currentPanel = undefined));
     }
-    static createOrShow(_extensionUri) {
+    static createOrShow(extensionUri) {
         if (SettingsPanel.currentPanel) {
             SettingsPanel.currentPanel.panel.reveal();
             return;
         }
-        const panel = vscode.window.createWebviewPanel('settingsView', 'Settings', vscode.ViewColumn.One, { enableScripts: true });
-        SettingsPanel.currentPanel = new SettingsPanel(panel);
+        const panel = vscode.window.createWebviewPanel('settingsView', 'Settings', vscode.ViewColumn.One, { enableScripts: true, localResourceRoots: [extensionUri] });
+        SettingsPanel.currentPanel = new SettingsPanel(panel, extensionUri);
     }
     // ===== helpers =====
     config() {
@@ -162,6 +104,8 @@ class SettingsPanel {
             'plugin.ai.provider': cfg.get('plugin.ai.provider', 'auto'),
             'plugin.ai.vendor': cfg.get('plugin.ai.vendor', ''),
             'plugin.ai.modelFamily': cfg.get('plugin.ai.modelFamily', ''),
+            'plugin.ai.devinOrgSlug': cfg.get('plugin.ai.devinOrgSlug', ''),
+            'plugin.ai.devinApiKey': cfg.get('plugin.ai.devinApiKey', ''),
             'plugin.zephyr.ownerId': cfg.get('plugin.zephyr.ownerId', ''),
             'plugin.zephyr.domain': cfg.get('plugin.zephyr.domain', ''),
             'plugin.zephyr.token': cfg.get('plugin.zephyr.token', ''),
@@ -209,6 +153,8 @@ class SettingsPanel {
             'plugin.ai.provider',
             'plugin.ai.vendor',
             'plugin.ai.modelFamily',
+            'plugin.ai.devinOrgSlug',
+            'plugin.ai.devinApiKey',
             'plugin.zephyr.ownerId',
             'plugin.zephyr.domain',
             'plugin.zephyr.token'
@@ -224,13 +170,13 @@ class SettingsPanel {
      * Se não estiver registrada no package.json, informa o usuário.
      */
     writeAll(values) {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o;
         return __awaiter(this, void 0, void 0, function* () {
             const cfg = this.config();
             const data = this.sanitize(values);
             // antes de gravar, checa registro das duas novas chaves
             const missing = [];
-            ['plugin.projectMap', 'plugin.projectMap.strict', 'plugin.ai.provider', 'plugin.ai.vendor', 'plugin.ai.modelFamily'].forEach(k => {
+            ['plugin.projectMap', 'plugin.projectMap.strict', 'plugin.ai.provider', 'plugin.ai.vendor', 'plugin.ai.modelFamily', 'plugin.ai.devinOrgSlug', 'plugin.ai.devinApiKey'].forEach(k => {
                 if (!this.isRegistered(k))
                     missing.push(k);
             });
@@ -247,11 +193,13 @@ class SettingsPanel {
                 cfg.update('plugin.ai.provider', (_e = data['plugin.ai.provider']) !== null && _e !== void 0 ? _e : 'auto', vscode.ConfigurationTarget.Global),
                 cfg.update('plugin.ai.vendor', (_f = data['plugin.ai.vendor']) !== null && _f !== void 0 ? _f : '', vscode.ConfigurationTarget.Global),
                 cfg.update('plugin.ai.modelFamily', (_g = data['plugin.ai.modelFamily']) !== null && _g !== void 0 ? _g : '', vscode.ConfigurationTarget.Global),
-                cfg.update('plugin.zephyr.ownerId', (_h = data['plugin.zephyr.ownerId']) !== null && _h !== void 0 ? _h : '', vscode.ConfigurationTarget.Global),
-                cfg.update('plugin.zephyr.domain', (_j = data['plugin.zephyr.domain']) !== null && _j !== void 0 ? _j : '', vscode.ConfigurationTarget.Global),
-                cfg.update('plugin.zephyr.token', (_k = data['plugin.zephyr.token']) !== null && _k !== void 0 ? _k : '', vscode.ConfigurationTarget.Global),
+                cfg.update('plugin.ai.devinOrgSlug', (_h = data['plugin.ai.devinOrgSlug']) !== null && _h !== void 0 ? _h : '', vscode.ConfigurationTarget.Global),
+                cfg.update('plugin.ai.devinApiKey', (_j = data['plugin.ai.devinApiKey']) !== null && _j !== void 0 ? _j : '', vscode.ConfigurationTarget.Global),
+                cfg.update('plugin.zephyr.ownerId', (_k = data['plugin.zephyr.ownerId']) !== null && _k !== void 0 ? _k : '', vscode.ConfigurationTarget.Global),
+                cfg.update('plugin.zephyr.domain', (_l = data['plugin.zephyr.domain']) !== null && _l !== void 0 ? _l : '', vscode.ConfigurationTarget.Global),
+                cfg.update('plugin.zephyr.token', (_m = data['plugin.zephyr.token']) !== null && _m !== void 0 ? _m : '', vscode.ConfigurationTarget.Global),
                 // tipos corretos:
-                cfg.update('plugin.projectMap', (_l = data['plugin.projectMap']) !== null && _l !== void 0 ? _l : {}, vscode.ConfigurationTarget.Global),
+                cfg.update('plugin.projectMap', (_o = data['plugin.projectMap']) !== null && _o !== void 0 ? _o : {}, vscode.ConfigurationTarget.Global),
                 cfg.update('plugin.projectMap.strict', Boolean(data['plugin.projectMap.strict']), vscode.ConfigurationTarget.Global)
             ]);
         });
@@ -266,12 +214,16 @@ class SettingsPanel {
                 if (message.type === 'loadSettings') {
                     const values = this.readAll();
                     this.post('currentSettings', { values });
+                    this.post('hostContext', {
+                        host: (0, hostContext_1.getHostContext)(),
+                        permissionHint: (0, hostContext_1.getLanguageModelPermissionHint)(),
+                    });
                     return;
                 }
                 if (message.type === 'saveSettings') {
                     const values = ((_a = message.settings) !== null && _a !== void 0 ? _a : {});
                     yield this.writeAll(values);
-                    this.post('status', { ok: true, message: '✅ Configurações salvas em User settings.' });
+                    this.post('status', { ok: true, message: 'Configurações salvas em User settings.' });
                     return;
                 }
                 if (message.type === 'openSettingsJson') {
@@ -279,7 +231,7 @@ class SettingsPanel {
                     return;
                 }
                 if (message.type === 'detectAiModels') {
-                    const models = yield (0, copilotLmBridge_1.listAvailableLmModels)();
+                    const models = yield (0, languageModelBridge_1.listAvailableLanguageModels)();
                     this.post('aiModels', { models });
                     return;
                 }
@@ -287,7 +239,7 @@ class SettingsPanel {
             catch (err) {
                 const msg = `Erro nos settings: ${(err === null || err === void 0 ? void 0 : err.message) || err}`;
                 vscode.window.showErrorMessage(msg);
-                this.post('status', { err: true, message: '❌ Ocorreu um erro ao processar a ação.' });
+                this.post('status', { err: true, message: 'Ocorreu um erro ao processar a ação.' });
             }
         }));
     }

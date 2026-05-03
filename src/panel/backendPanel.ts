@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { getBackendviewContent } from '../view/backendViewForm';
+import { getBackendviewContent } from '../view/backend/backendViewForm';
 import {
   loadDocumentation,
   unloadDocumentation,
@@ -13,12 +13,30 @@ import {
   generateModelFromCurl,
 } from '../generators/api/generateFromCurl';
 
+function getNonce() {
+  let text = '';
+  const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  for (let i = 0; i < 32; i++) text += possible.charAt(Math.floor(Math.random() * possible.length));
+  return text;
+}
+
 export class BackendPanel {
   public static currentPanel: BackendPanel | undefined;
   private readonly panel: vscode.WebviewPanel;
-  private constructor(panel: vscode.WebviewPanel) {
+  private readonly extensionUri: vscode.Uri;
+  private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
     this.panel = panel;
-    this.panel.webview.html = getBackendviewContent();
+    this.extensionUri = extensionUri;
+    const webview = this.panel.webview;
+    const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'style', 'style.css'));
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'backend', 'backend.js'));
+    const nonce = getNonce();
+    this.panel.webview.html = getBackendviewContent({
+      webview,
+      nonce,
+      styleUri: String(styleUri),
+      scriptUri: String(scriptUri)
+    });
     this.registerMessageHandlers();
     this.panel.onDidDispose(() => {
       BackendPanel.currentPanel = undefined;
@@ -38,7 +56,7 @@ export class BackendPanel {
       { enableScripts: true, localResourceRoots: [extensionUri] }
     );
 
-    BackendPanel.currentPanel = new BackendPanel(panel);
+    BackendPanel.currentPanel = new BackendPanel(panel, extensionUri);
   }
 
   private registerMessageHandlers() {

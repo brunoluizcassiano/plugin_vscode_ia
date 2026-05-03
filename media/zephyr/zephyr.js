@@ -222,8 +222,11 @@ function showProjectFlow() {
 }
 
 function showIssueFlow() {
-  document.getElementById('issueHeader').style.display = 'block';
-  document.getElementById('issueTests').style.display = 'block';
+  const issueHeader = document.getElementById('issueHeader');
+  const issueTests = document.getElementById('issueTests');
+  const hasTests = Array.isArray(testesZephyrRaw) && testesZephyrRaw.length > 0;
+  if (issueHeader) issueHeader.style.display = hasTests ? 'block' : 'none';
+  if (issueTests) issueTests.style.display = hasTests ? 'block' : 'none';
   const tb = document.querySelector('.toolbar');
   if (tb) tb.style.display = 'flex';
   hide(projectFlow.root);
@@ -241,7 +244,7 @@ function setProjLoading(on, text) {
 function mountProjetos(list) {
   _todosProjetos = Array.isArray(list) ? list : [];
   projectFlow.select.innerHTML = '<option value="">Selecione...</option>' +
-    _todosProjetos.map(p => '<option value="' + (p.id || p.key) + '">' + (p.name || p.key || '') + (p.key ? ' (' + p.key + ')' : '') + '</option>').join('');
+    _todosProjetos.map(p => '<option value="' + (p.key || p.id || '') + '">' + (p.name || p.key || '') + (p.key ? ' (' + p.key + ')' : '') + '</option>').join('');
   setAppState({ projetosCache: _todosProjetos });
 }
 
@@ -362,7 +365,7 @@ function applyZephyrKeys() {
   const map = getZephyrKeysState();
   Object.keys(map).forEach(i => {
     const el = document.getElementById(`cenarioLabel-${i}`);
-    if (el) el.innerHTML = `📝 Cenário (IA): ${map[i]}`;
+    if (el) el.innerHTML = `Cenário IA: ${map[i]}`;
   });
 }
 
@@ -564,29 +567,29 @@ function enviarCriarScripts() {
 function selecionarPasta() { vscode.postMessage({ type: 'selecionarPastaDestino' }); }
 
 // escapar HTML
-function esc(s){
+function esc(s) {
   return String(s ?? '')
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 // encurta caminhos pra ficar legível (mostra a partir de /cypress/ se existir)
-function shortPath(p){
-  const txt = String(p || '').replaceAll('\\','/');
+function shortPath(p) {
+  const txt = String(p || '').replaceAll('\\', '/');
   const idx = txt.toLowerCase().lastIndexOf('/cypress/');
   return idx >= 0 ? txt.slice(idx + 1) : txt;
 }
 
 // gera o HTML a partir do report
-function renderStepsFeedback(report){
+function renderStepsFeedback(report) {
   if (!report) {
     return `<div class="sf-card"><div class="sf-empty">Sem dados.</div></div>`;
   }
 
   // badge/header
   let badgeClass = 'sf-warn', badgeText = 'Nenhum step novo';
-  if (report.status === 'created') { badgeClass = 'sf-ok';  badgeText = `Steps gerados: ${report.createdCount}`; }
-  if (report.status === 'error')   { badgeClass = 'sf-err'; badgeText = 'Erro ao gerar steps'; }
+  if (report.status === 'created') { badgeClass = 'sf-ok'; badgeText = `Steps gerados: ${report.createdCount}`; }
+  if (report.status === 'error') { badgeClass = 'sf-err'; badgeText = 'Erro ao gerar steps'; }
 
   const header = `
     <div class="sf-head">
@@ -601,25 +604,24 @@ function renderStepsFeedback(report){
   const createdBlock = created.length ? `
     <div class="sf-title">Criados (${created.length})</div>
     <ul class="sf-list">
-      ${created.map(({type,expr}) => `<li><span class="sf-code">${esc(type)} — ${esc(expr)}</span></li>`).join('')}
+      ${created.map(({ type, expr }) => `<li><span class="sf-code">${esc(type)} — ${esc(expr)}</span></li>`).join('')}
     </ul>` : '';
 
   // pulados (duplicados)
   const skipped = (report.skipped || []);
   const skippedBlock = `
     <div class="sf-title">Pulados por duplicidade (${skipped.length})</div>
-    ${
-      skipped.length
-        ? `<ul class="sf-list">
-            ${skipped.map(({pair,locations}) => `
+    ${skipped.length
+      ? `<ul class="sf-list">
+            ${skipped.map(({ pair, locations }) => `
               <li>
                 <span class="sf-code">${esc(pair.type)} — ${esc(pair.expr)}</span>
                 <div style="font-size:12px;opacity:.85;margin-top:4px">
-                  Já existe em: ${(locations||[]).map(l => `<span class="sf-pill">${esc(shortPath(l))}</span>`).join('')}
+                  Já existe em: ${(locations || []).map(l => `<span class="sf-pill">${esc(shortPath(l))}</span>`).join('')}
                 </div>
               </li>`).join('')}
            </ul>`
-        : `<div class="sf-empty">Nenhum duplicado detectado.</div>`
+      : `<div class="sf-empty">Nenhum duplicado detectado.</div>`
     }
   `;
 
@@ -642,7 +644,7 @@ function setStepsFeedback(html) {
 function enviarCriacaoCenariosIA() {
   const selecionados = [];
   document.querySelectorAll('.checkbox-ia:checked').forEach((cb) => {
-    const idx = Number(cb.dataset.idx ?? (cb.id || '').replace('checkbox-',''));
+    const idx = Number(cb.dataset.idx ?? (cb.id || '').replace('checkbox-', ''));
     if (Number.isNaN(idx)) return;
     // texto do cenário
     const raw = document.getElementById(`textarea-${idx}`)?.value || '';
@@ -656,7 +658,7 @@ function enviarCriacaoCenariosIA() {
     const erroDiv = document.getElementById(`erro-folder-${idx}`);
     if (!folderId) {
       if (erroDiv) {
-        erroDiv.innerText = '⚠️ Você precisa selecionar ao menos uma pasta.';
+        erroDiv.innerText = 'Você precisa selecionar ao menos uma pasta.';
         erroDiv.style.display = 'block';
       }
       return;
@@ -679,7 +681,7 @@ function enviarCriacaoCenariosIA() {
     return;
   }
   vscode.postMessage({ type: 'enviarParaZephyr', payload: selecionados });
- }
+}
 
 function enviarAtualizacao() {
   const selecionados = [];
@@ -720,17 +722,17 @@ function getMetaForIdx(idx) {
   if (isManual(idx)) {
     // selects (manual)
     const automationStatus = read(byId(`automationStatus-${idx}`)) || 'Not Automated';
-    const testClass  = normVal('testClass',  read(byId(`metaTestClass-${idx}`)));
-    const testType   = normVal('testType',   read(byId(`metaTestType-${idx}`)));
-    const testGroup  = normVal('testGroup',  read(byId(`metaTestGroup-${idx}`)));
+    const testClass = normVal('testClass', read(byId(`metaTestClass-${idx}`)));
+    const testType = normVal('testType', read(byId(`metaTestType-${idx}`)));
+    const testGroup = normVal('testGroup', read(byId(`metaTestGroup-${idx}`)));
     return { automationStatus, testClass, testType, testGroup };
   }
 
   // spans (IA)
   const automationStatus = read(byId(`automationStatus-${idx}`)) || 'Not Automated';
-  const testClass  = normVal('testClass',  read(byId(`testClass-${idx}`)));
-  const testType   = normVal('testType',   read(byId(`testType-${idx}`)));
-  const testGroup  = normVal('testGroup',  read(byId(`testGroup-${idx}`)));
+  const testClass = normVal('testClass', read(byId(`testClass-${idx}`)));
+  const testType = normVal('testType', read(byId(`testType-${idx}`)));
+  const testGroup = normVal('testGroup', read(byId(`testGroup-${idx}`)));
   return { automationStatus, testClass, testType, testGroup };
 }
 
@@ -744,7 +746,7 @@ function resolveFolderId(idx) {
   if (f2 && f2.value) return Number(f2.value);
   if (f1 && f1.value) return Number(f1.value);
   return 0;
- }
+}
 
 function handleSubmit(event) {
   event.preventDefault();
@@ -822,25 +824,40 @@ function renderDados(i) {
   const container = document.querySelector('.container');
   const header = document.getElementById('issueHeader');
   const tests = document.getElementById('issueTests');
-  testesZephyrRaw = i.testesZephyr || [];
+  testesZephyrRaw = i?.testesZephyr || [];
   if (!i) {
-    header.innerHTML = "<p>❌ Issue não encontrada.</p>";
+    header.style.display = 'block';
+    tests.style.display = 'none';
+    header.innerHTML = "<p>Issue não encontrada.</p>";
     tests.innerHTML = '';
   } else {
-    header.innerHTML = `<p><strong>🧪 Testes vinculados (Zephyr):</strong></p>`;
-    tests.innerHTML = `
-        ${i.testesZephyr.map((t, idx) => `
+    if (!Array.isArray(testesZephyrRaw) || testesZephyrRaw.length === 0) {
+      header.style.display = 'none';
+      tests.style.display = 'none';
+      header.innerHTML = '';
+      tests.innerHTML = '';
+    } else {
+      header.style.display = 'block';
+      tests.style.display = 'block';
+      header.innerHTML = `<p><strong>Testes vinculados (Zephyr):</strong></p>`;
+      tests.innerHTML = `
+        ${testesZephyrRaw.map((t, idx) => {
+        const details = t.details || {};
+        const customFields = details.customFields || {};
+        const testName = details.name || t.key || 'Sem nome';
+        const script = t.script || '<i>Sem conteúdo</i>';
+        return `
         <div style="border: 1px solid #444; padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem; background-color: #2a2a2a;">
           <h3 style="color: #4fc3f7; margin-bottom: 0.5rem;">
-            🔹 ${t.key} (v${t.version}) - ${t.details.name}
+            ${t.key} (v${t.version}) - ${testName}
           </h3>
           <div style="background-color: #3c3c3c; padding: 0.8rem; border-radius: 6px; margin-bottom: 1rem;">
-            <p><strong>🤖 Automation Status: </strong> ${t.details.customFields?.['Automation Status'] || 'N/A'}</p>
-            <p><strong>🏷️ Test Class: </strong> ${t.details.customFields?.['Test Class'] || 'N/A'}</p>
-            <p><strong>📦 Test Type: </strong> ${t.details.customFields?.['Test Type'] || 'N/A'}</p>
-            <p><strong>🧪 Test Group: </strong> ${t.details.customFields?.['Test Group'] || 'N/A'}</p>
+            <p><strong>Automation Status: </strong> ${customFields['Automation Status'] || 'N/A'}</p>
+            <p><strong>Test Class: </strong> ${customFields['Test Class'] || 'N/A'}</p>
+            <p><strong>Test Type: </strong> ${customFields['Test Type'] || 'N/A'}</p>
+            <p><strong>Test Group: </strong> ${customFields['Test Group'] || 'N/A'}</p>
           </div>
-          <pre style="background-color: #1e1e1e; padding: 1rem; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; color: #ccc;">${t.script}</pre>
+          <pre style="background-color: #1e1e1e; padding: 1rem; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; color: #ccc;">${script}</pre>
   
           <div id="ia-container-${idx}" style="display:none;">
             <div class="sugestao">
@@ -859,9 +876,11 @@ function renderDados(i) {
               <label for="checkbox-${idx}">Aceitar sugestão para este cenário</label>
             </div>
           </div>
-        </div>`).join('')}
+        </div>`;
+      }).join('')}
       `;
-    sugestoesIA = i.testesZephyr.map((t, idx) => ({ key: t.key, suggestion: `Sugestão da IA para ${t.key}...` }));
+      sugestoesIA = testesZephyrRaw.map((t, idx) => ({ key: t.key, suggestion: `Sugestão da IA para ${t.key}...` }));
+    }
   }
   container.style.display = 'block';
   loadFormState();
@@ -887,39 +906,39 @@ function renderizarSugestao(idx, conteudo, testType, testClass, testGroup, manua
   // Cabeçalho + bloco de meta
   const headerHtml = `
     <h3 style="color:#4fc3f7;margin-bottom:.5rem;">
-      <span id="cenarioLabel-${idx}">📝 Cenário ${manual ? '(Manual)' : '(IA)'}:</span>
+      <span id="cenarioLabel-${idx}">Cenário ${manual ? '(Manual)' : '(IA)'}:</span>
       <span id="scenarioTitle-${idx}">${extrairTitulosDosCenarios(conteudo)}</span>
     </h3>
     <div class="meta-box" style="background-color:#3c3c3c;padding:.8rem;border-radius:6px;margin-bottom:1rem;">
-      <p><strong>🤖 Automation Status: </strong><span id="automationStatus-${idx}">Not Automated</span></p>
+      <p><strong>Automation Status: </strong><span id="automationStatus-${idx}">Not Automated</span></p>
       ${needEditable
       ? `
             <div class="meta-grid">
               <div class="meta-line manual-select">
-                <label>🏷️ Test Class:</label>
+                <label>Test Class:</label>
                 <div id="wrapTestClass-${idx}"></div>
               </div>
               <div class="meta-line manual-select">
-                <label>📦 Test Type:</label>
+                <label>Test Type:</label>
                 <div id="wrapTestType-${idx}"></div>
               </div>
               <div class="meta-line manual-select">
-                <label>🧪 Test Group:</label>
+                <label>Test Group:</label>
                 <div id="wrapTestGroup-${idx}"></div>
               </div>
             </div>
           `
       : `
-            <p><strong>🏷️ Test Class: </strong><span id="testClass-${idx}">${testClass}</span></p>
-            <p><strong>📦 Test Type: </strong><span id="testType-${idx}">${testType}</span></p>
-            <p><strong>🧪 Test Group: </strong><span id="testGroup-${idx}">${testGroup}</span></p>
+            <p><strong>Test Class: </strong><span id="testClass-${idx}">${testClass}</span></p>
+            <p><strong>Test Type: </strong><span id="testType-${idx}">${testType}</span></p>
+            <p><strong>Test Group: </strong><span id="testGroup-${idx}">${testGroup}</span></p>
           `
     }
-      <label>📁 Produto:</label>
+      <label>Produto:</label>
       <select id="folder1-${idx}"><option value="">Selecione...</option></select>
-      <label>📁 Sub-Produto:</label>
+      <label>Subproduto:</label>
       <select id="folder2-${idx}" style="display:none;"></select>
-      <label>📁 Funcionalidade:</label>
+      <label>Funcionalidade:</label>
       <select id="folder3-${idx}" style="display:none;"></select>
     </div>
   `;
@@ -931,7 +950,7 @@ function renderizarSugestao(idx, conteudo, testType, testClass, testGroup, manua
     </div>
     <div id="erro-folder-${idx}" style="display:none;color:red;font-weight:bold;margin-top:10px;"></div>
     <hr style="margin:1rem 0;border:0;border-top:1px solid #444;" />
-    <button class="btn-excluir" id="btnExcluir-${idx}">🗑️ Excluir</button>
+    <button class="btn-excluir" id="btnExcluir-${idx}">Excluir</button>
   `;
   div.innerHTML = headerHtml + bodyHtml;
   container.appendChild(div);
@@ -1034,6 +1053,16 @@ function mostrarSugestoesIA() {
   if (!Array.isArray(sugestoesIA) || sugestoesIA.length === 0) return;
   const state = vscode.getState();
   if (!testesZephyrRaw || testesZephyrRaw.length === 0) {
+    const header = document.getElementById('issueHeader');
+    const tests = document.getElementById('issueTests');
+    if (header) {
+      header.style.display = 'block';
+      header.innerHTML = `<p><strong>Sugestões de cenários</strong></p>`;
+    }
+    if (tests) {
+      tests.style.display = 'block';
+      tests.innerHTML = '';
+    }
     document.getElementById('btnSelecionarTodos').style.display = 'inline-block';
     document.getElementById('btnEnviarIA').style.display = 'inline-block';
     document.getElementById('btnAdicionar').style.display = 'inline-block';
@@ -1047,6 +1076,13 @@ function mostrarSugestoesIA() {
       document.getElementById('checkbox-' + idx).checked = state?.checkbox?.[idx] || false;
     });
   } else {
+    const header = document.getElementById('issueHeader');
+    const tests = document.getElementById('issueTests');
+    if (header) {
+      header.style.display = 'block';
+      header.innerHTML = `<p><strong>Testes vinculados (Zephyr):</strong></p>`;
+    }
+    if (tests) tests.style.display = 'block';
     sugestoesIA.forEach((item, idx) => {
       const el = document.getElementById('ia-container-' + idx);
       const textarea = document.getElementById('textarea-' + idx);
@@ -1079,7 +1115,7 @@ const state = vscode.getState() || {};
 // Reidrata dados gerais (se existirem)
 if (state?.nome) {
   const el = document.getElementById('ola');
-  if (el) el.textContent = '👋 Olá ' + state.nome;
+  if (el) el.textContent = 'Olá ' + state.nome;
   nomeRecebido = true;
 }
 if (state?.pastasPrincipaisCache) pastasPrincipaisCache = state.pastasPrincipaisCache;
@@ -1144,10 +1180,27 @@ window.addEventListener('message', event => {
     setStepsFeedback(renderStepsFeedback(message.payload));
   }
   if (message.type === 'nomeUsuario') {
-    document.getElementById('ola').textContent = '👋 Olá ' + message.nome;
+    document.getElementById('ola').textContent = 'Olá ' + message.nome;
     nomeRecebido = true;
     vscode.setState({ ...vscode.getState(), nome: message.nome });
     tentarExibirConteudo();
+  }
+  if (message.type === 'issueContext') {
+    issueId = message.issueId || '';
+    issueKey = message.issueKey || '';
+    if (issueId || issueKey) {
+      _projetoSelecionado = '';
+      _selectedFolderId = null;
+      pastasPrincipaisCache = [];
+      vscode.setState({
+        ...vscode.getState(),
+        issueId,
+        issueKey,
+        projetoSelecionado: '',
+        pastasPrincipaisCache: []
+      });
+      showIssueFlow();
+    }
   }
   if (message.type === 'zephyrData') {
     esconderLoading();
@@ -1243,12 +1296,24 @@ window.addEventListener('message', event => {
     mostrarLoading();
     nomeRecebido = false;
     testesRecebido = false;
+    issueId = message.issueId || '';
+    issueKey = message.issueKey || '';
+    _projetoSelecionado = '';
+    _selectedFolderId = null;
+    pastasPrincipaisCache = [];
     document.getElementById('issueHeader').innerHTML = '';
     document.getElementById('issueTests').innerHTML = '';
     document.getElementById('btnAdicionar').style.display = 'none';
     document.getElementById('btnSelecionarTodos').style.display = 'none';
     document.getElementById('btnEnviarIA').style.display = 'none';
-    vscode.setState({ ...vscode.getState(), zephyrData: null });
+    vscode.setState({
+      ...vscode.getState(),
+      zephyrData: null,
+      issueId,
+      issueKey,
+      projetoSelecionado: '',
+      pastasPrincipaisCache: []
+    });
     vscode.postMessage({ type: 'carregarNome' });
   }
   if (message.type === 'pastaSelecionada') {

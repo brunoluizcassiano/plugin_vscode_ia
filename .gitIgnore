@@ -1,4 +1,17 @@
+#folder node_module
 node_modules/
+
+#folder out
+out/
+
+#vscode
 .vscode/
 
+#file extension
+f1rst-vscode-extension-*
+quality-plugin-*
+
+
+#file package-lock.json
 package-lock.json
+

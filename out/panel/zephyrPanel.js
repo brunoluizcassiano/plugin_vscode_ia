@@ -119,6 +119,110 @@ function applyZephyrSelectFilters(rawTests, filtros) {
     }
     return out;
 }
+function parseAnaliseCenarioJson(raw) {
+    const json = tryParseJsonLoose(raw);
+    if (!json || typeof json !== 'object')
+        return null;
+    // Heurística: precisa ter pelo menos a chave do gherkin reescrito
+    if (!('cenario_reescrito_gherkin' in json))
+        return null;
+    return json;
+}
+function normalizeAnaliseCenarioRespostaToSugestao(raw) {
+    const parsed = parseAnaliseCenarioJson(raw);
+    if ((parsed === null || parsed === void 0 ? void 0 : parsed.cenario_reescrito_gherkin) && typeof parsed.cenario_reescrito_gherkin === 'string') {
+        // transforma ```gherkin ...``` em texto interno do cenário (como a UX já usa)
+        return { sugestao: extractScenarioTextFromGherkinBlock(parsed.cenario_reescrito_gherkin) };
+    }
+    // fallback legado
+    return { sugestao: raw };
+}
+function tryParseJsonLoose(raw) {
+    if (!raw)
+        return null;
+    // 1) tenta direto
+    try {
+        return JSON.parse(raw);
+    }
+    catch (_a) { }
+    // 2) tenta extrair do primeiro { ao último }
+    const a = raw.indexOf('{');
+    const b = raw.lastIndexOf('}');
+    if (a >= 0 && b > a) {
+        const candidate = raw.slice(a, b + 1);
+        try {
+            return JSON.parse(candidate);
+        }
+        catch (_b) { }
+    }
+    return null;
+}
+function extractScenarioTextFromGherkinBlock(block) {
+    const m = block.match(/```gherkin\s*([\s\S]*?)```/i);
+    if (!m)
+        return block.trim();
+    return m[1]
+        .split('\n')
+        .map(l => l.trimStart())
+        .filter(l => l.trim() !== '')
+        .join('\n')
+        .trim();
+}
+function parseCriarCenariosJsonSchema(raw) {
+    const json = tryParseJsonLoose(raw);
+    if (!json || !Array.isArray(json.cenarios))
+        return null;
+    return json.cenarios.map((c, idx) => {
+        const gherkinRaw = typeof (c === null || c === void 0 ? void 0 : c.gherkin) === 'string' ? c.gherkin : '';
+        const gherkin = extractScenarioTextFromGherkinBlock(gherkinRaw);
+        return {
+            titulo: (c === null || c === void 0 ? void 0 : c.titulo) || `Cenário ${idx + 1}`,
+            testType: (c === null || c === void 0 ? void 0 : c.test_type) || '',
+            testClass: (c === null || c === void 0 ? void 0 : c.test_class) || '',
+            testGroup: (c === null || c === void 0 ? void 0 : c.test_group) || '',
+            gherkin,
+        };
+    });
+}
+function buildSugestoesIAFromResposta(respostaRaw, extrairTodosCenariosGherkin, extractTestType, extractTestClass, extractTestGroup) {
+    // 1) formato novo (JSON)
+    const parsed = parseCriarCenariosJsonSchema(respostaRaw);
+    if (parsed && parsed.length) {
+        return parsed.map((c, idx) => ({
+            key: `cenario-gerado-${idx + 1}`,
+            sugestao: c.gherkin || '',
+            testType: c.testType || '',
+            testClass: c.testClass || '',
+            testGroup: c.testGroup || '',
+        }));
+    }
+    // 2) fallback: formato antigo (texto)
+    const sugestoesIA = [];
+    if (respostaRaw.includes('Scenario:')) {
+        const cenariosSeparados = extrairTodosCenariosGherkin(respostaRaw);
+        const testTypes = extractTestType(respostaRaw);
+        const testClasses = extractTestClass(respostaRaw);
+        const testGroups = extractTestGroup(respostaRaw);
+        cenariosSeparados.forEach((texto, idx) => {
+            sugestoesIA.push({
+                key: `cenario-gerado-${idx + 1}`,
+                sugestao: texto,
+                testType: testTypes[idx] || '',
+                testClass: testClasses[idx] || '',
+                testGroup: testGroups[idx] || ''
+            });
+        });
+        return sugestoesIA;
+    }
+    // 3) fallback final: cenário único
+    return [{
+            key: 'cenario-unico',
+            sugestao: respostaRaw,
+            testType: extractTestType(respostaRaw)[0] || '',
+            testClass: extractTestClass(respostaRaw)[0] || '',
+            testGroup: extractTestGroup(respostaRaw)[0] || ''
+        }];
+}
 class ZephyrPanel {
     constructor(panel, extensionUri, issueId, issueKey, comentario) {
         this._panel = panel;
@@ -139,9 +243,9 @@ class ZephyrPanel {
             styleUri: String(styleUri),
             scriptUri: String(scriptUri)
         });
-        // 🎧 Ouvindo mensagens do HTML
+        // &#x1f3a7; Ouvindo mensagens do HTML
         this._panel.webview.onDidReceiveMessage(this.handleMessage.bind(this));
-        // 🧹 Limpa referência ao fechar
+        // &#x1f9f9; Limpa referência ao fechar
         this._panel.onDidDispose(() => {
             ZephyrPanel.currentPanel = undefined;
         });
@@ -205,42 +309,19 @@ class ZephyrPanel {
                     if (testes.length === 0) {
                         const resposta = yield vscode.commands.executeCommand('plugin-vscode.criarCenariosIaQa', comentario || '', testes || '');
                         const respostaRaw = typeof resposta === 'string' ? resposta : ((resposta === null || resposta === void 0 ? void 0 : resposta.message) || 'Sem resposta da IA.');
-                        // Detectar se existem múltiplos cenários Gherkin
-                        if (respostaRaw.includes('Scenario:')) {
-                            const cenariosSeparados = extrairTodosCenariosGherkin(respostaRaw);
-                            const testTypes = extractTestType(respostaRaw);
-                            const testClasses = extractTestClass(respostaRaw);
-                            const testGroups = extractTestGroup(respostaRaw);
-                            cenariosSeparados.forEach((texto, idx) => {
-                                sugestoesIA.push({
-                                    key: `cenario-gerado-${idx + 1}`,
-                                    sugestao: texto,
-                                    testType: testTypes[idx] || '',
-                                    testClass: testClasses[idx] || '',
-                                    testGroup: testGroups[idx] || ''
-                                });
-                                console.log(`Cenário: ${texto}`);
-                                console.log(`Type: ${testTypes[idx]}`);
-                                console.log(`Class: ${testClasses[idx]}`);
-                                console.log(`Group: ${testGroups[idx]}`);
-                            });
-                        }
-                        else {
-                            sugestoesIA.push({
-                                key: 'cenario-unico',
-                                sugestao: respostaRaw,
-                                testType: extractTestType(respostaRaw)[0] || '',
-                                testClass: extractTestClass(respostaRaw)[0] || '',
-                                testGroup: extractTestGroup(respostaRaw)[0] || ''
-                            });
-                        }
+                        // ✅ ALTERAÇÃO MÍNIMA:
+                        // Agora suporta JSON consistente (novo) e também mantém o parser antigo (texto).
+                        const sugestoesNormalizadas = buildSugestoesIAFromResposta(respostaRaw, extrairTodosCenariosGherkin, extractTestType, extractTestClass, extractTestGroup);
+                        sugestoesIA.push(...sugestoesNormalizadas);
                     }
                     else {
                         for (const t of testes) {
                             const resposta = yield vscode.commands.executeCommand('plugin-vscode.analiseCenariosIaQa', comentario || '', t.script || '');
+                            const respostaRaw = typeof resposta === 'string' ? resposta : ((resposta === null || resposta === void 0 ? void 0 : resposta.message) || 'Sem resposta da IA.');
+                            const norm = normalizeAnaliseCenarioRespostaToSugestao(respostaRaw);
                             sugestoesIA.push({
                                 key: t.key,
-                                sugestao: typeof resposta === 'string' ? resposta : ((resposta === null || resposta === void 0 ? void 0 : resposta.message) || 'Sem resposta da IA.')
+                                sugestao: norm.sugestao
                             });
                         }
                     }
@@ -376,7 +457,9 @@ class ZephyrPanel {
                         type: 'estruturaProjeto',
                         folders: (resultado === null || resultado === void 0 ? void 0 : resultado.folders) || [],
                         flat: (resultado === null || resultado === void 0 ? void 0 : resultado.flat) || [],
-                        projectKey: (resultado === null || resultado === void 0 ? void 0 : resultado.projectKey) || projectKey
+                        projectKey: (resultado === null || resultado === void 0 ? void 0 : resultado.requestedProjectKey) || projectKey,
+                        zephyrProjectKey: (resultado === null || resultado === void 0 ? void 0 : resultado.projectKey) || '',
+                        project: (resultado === null || resultado === void 0 ? void 0 : resultado.project) || null
                     });
                 }
                 catch (e) {
@@ -385,7 +468,7 @@ class ZephyrPanel {
                 }
             }
             else if (message.type === 'aplicarFiltrosProjeto') {
-                // 👉 novo caso: ao aplicar seleção, buscar "todos os testes que estão naquela pasta"
+                // &#x1f449; novo caso: ao aplicar seleção, buscar "todos os testes que estão naquela pasta"
                 try {
                     const projectKey = message.projetoIdOuKey || '';
                     const pastaIds = Array.isArray(message.pastaIds) ? message.pastaIds : [];
@@ -422,6 +505,7 @@ class ZephyrPanel {
         }));
         // Envia nome do usuário assim que carrega
         this.sendNomeUsuario();
+        this._panel.webview.postMessage({ type: 'issueContext', issueId, issueKey, comentario });
         // Envia dados do Zephyr
         this.zephyr(issueId, issueKey, comentario);
     }
@@ -433,13 +517,17 @@ class ZephyrPanel {
                 ZephyrPanel.currentPanel._panel.reveal(column);
                 // Se a issueKey for diferente, atualiza
                 if (ZephyrPanel.currentPanel.issueKey !== issueKey) {
+                    ZephyrPanel.currentPanel.issueId = issueId;
                     ZephyrPanel.currentPanel.issueKey = issueKey;
+                    ZephyrPanel.currentPanel.comentario = comentario;
                     // Limpa estado da tela e reinicia o carregamento
                     ZephyrPanel.currentPanel._panel.webview.postMessage({
                         type: 'novoId',
+                        issueId,
                         issueKey,
                         comentario
                     });
+                    ZephyrPanel.currentPanel._panel.webview.postMessage({ type: 'issueContext', issueId, issueKey, comentario });
                     // Reenvia os dados com novo issueKey
                     ZephyrPanel.currentPanel.sendNomeUsuario();
                     ZephyrPanel.currentPanel.zephyr(issueId, issueKey, comentario);
@@ -477,6 +565,13 @@ class ZephyrPanel {
             }
             catch (error) {
                 console.error('Erro ao obter dados do Zephyr:', error);
+                this._panel.webview.postMessage({
+                    type: 'zephyrData',
+                    issueId,
+                    issueKey,
+                    comentario,
+                    zephyrData: { key: issueKey, testesZephyr: [] }
+                });
             }
         });
     }
@@ -485,7 +580,7 @@ class ZephyrPanel {
             if (message.type === 'buscarIssue') {
                 const { key } = message;
                 const issue = yield vscode.commands.executeCommand('plugin-vscode.getZephyrTestToIssue', key);
-                console.log('🔍 Resultado da issue:', issue);
+                console.log('&#x1f50d; Resultado da issue:', issue);
                 if (issue && typeof issue === 'object' && 'key' in issue) {
                     this._panel.webview.postMessage({ type: 'detalhesIssue', issue });
                 }

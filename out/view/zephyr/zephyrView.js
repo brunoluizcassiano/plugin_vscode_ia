@@ -18,35 +18,41 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
   <link rel="stylesheet" href="${styleUri}">
   
   </head>
-  <body>
+  <body class="zephyr-view">
   <div id="loading">
     <img src="https://cssbud.com/wp-content/uploads/2021/08/beepboop.gif" alt="Carregando..." />
-    <p>🔄 Carregando dados do Zephyr...</p>
+    <p>Carregando dados do Zephyr...</p>
   </div>
   
-  <div class="container">
-    <h2 id="ola"></h2>
+  <div class="container plugin-shell zephyr-shell">
+    <div class="plugin-header zephyr-header">
+      <div class="plugin-eyebrow">PLARD - Quality Engineering</div>
+      <h2 id="ola" class="plugin-title">Zephyr</h2>
+      <p class="plugin-subtitle">Explore testes existentes, organize cenários e prepare insumos para os próximos passos do fluxo.</p>
+    </div>
   
-    <div id="issueHeader" class="issue-header"></div>
-    <div id="issueTests" class="issue-tests"></div>
+    <div id="issueHeader" class="issue-header plugin-section" style="display:none;"></div>
+    <div id="issueTests" class="issue-tests plugin-section" style="display:none;"></div>
+
     <!-- =================== Fluxo por PROJETO (simplificado) =================== -->
-    <div id="projectFlow" style="display:none; margin-bottom:1rem;">
-      <h2>Explorar testes por Projeto</h2>
-      <div class="row">
-        <div class="col">
-          <label class="muted">Projeto (Jira)</label><br />
+    <div id="projectFlow" class="plugin-section zephyr-project-flow" style="display:none; margin-bottom:1rem;">
+      <div class="plugin-section-title">Explorar testes por projeto</div>
+      <div class="plugin-grid zephyr-project-grid">
+        <div class="plugin-field">
+          <label class="muted">Projeto (Jira)</label>
           <select id="projectSelect"><option value="">Selecione...</option></select>
         </div>
       </div>
-      <div id="projectStructure" style="display:none; margin-top:1rem;">
+
+      <div id="projectStructure" class="zephyr-project-structure" style="display:none; margin-top:1rem;">
         <div>
           <div class="muted">Estrutura de pastas (Zephyr)</div>
           
           <!-- Filtros (Zephyr) -->
-          <div id="filtersPanel" class="filters-panel">
+          <div id="filtersPanel" class="filters-panel plugin-section">
             <div class="filters-title">Filtros</div>
             <div class="filters-grid">
-              <div class="field">
+              <div class="field plugin-field">
                 <label for="fltAutomationStatus">Automation status</label>
                 <select id="fltAutomationStatus">
                   <option value="N/A">N/A</option>
@@ -55,7 +61,7 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
                   <option value="Not applicable">Not Applicable</option>
                 </select>
               </div>
-              <div class="field">
+              <div class="field plugin-field">
                 <label for="fltTestType">Test Type</label>
                 <select id="fltTestType">
                   <option value="N/A">N/A</option>
@@ -68,7 +74,7 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
                   <option value="UI">UI</option>
                 </select>
               </div>
-              <div class="field">
+              <div class="field plugin-field">
                 <label for="fltTestClass">Test Class</label>
                 <select id="fltTestClass">
                   <option value="N/A">N/A</option>
@@ -76,7 +82,7 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
                   <option value="Negative">Negative</option>
                 </select>
               </div>
-              <div class="field">
+              <div class="field plugin-field">
                 <label for="fltTestGroup">Test Group</label>
                 <select id="fltTestGroup">
                   <option value="N/A">N/A</option>
@@ -86,78 +92,82 @@ function getZephyrViewContent({ webview, nonce, styleUri, scriptUri }) {
                 </select>
               </div>
             </div>
-            <div class="filters-row-actions">
-              <button id="btnClearFilters" type="button" class="btn">Limpar filtros</button>
+            <div class="filters-row-actions plugin-toolbar">
+              <button id="btnClearFilters" type="button" class="btn btn-ide btn-ide-ghost">Limpar filtros</button>
             </div>
           </div>
+
           <div id="folderTree" class="folder-tree"></div>
         </div>
-        <div class="actions-row">
-          <button id="btnApplyStructure" type="button" disabled>Aplicar Seleção</button>
+
+        <div class="actions-row plugin-toolbar">
+          <button id="btnApplyStructure" type="button" class="btn-ide btn-ide-primary" disabled>Aplicar seleção</button>
         </div>
+
         <div id="projLoading" style="display:none; margin-top:.5rem; color:#ccc;">Carregando...</div>
       </div>
     </div>
     <!-- =================== /Fluxo por PROJETO =================== -->
   
     <!-- toolbar 1: ações principais -->
-    <div class="toolbar" role="toolbar">
-      <button id="btnAnalisar" class="hidden">
-        <span class="icon">🧠</span> Analisar com IA QA
+    <div class="toolbar plugin-section plugin-toolbar zephyr-main-toolbar" role="toolbar">
+      <button id="btnAnalisar" class="hidden btn-ide btn-ide-primary">
+        <span class="icon"></span> Analisar com IA QA
       </button>
-      <button id="btnAdicionar" style="display: none;" class="hidden">
-        <span class="icon">➕</span> Adicionar cenário
+      <button id="btnAdicionar" style="display: none;" class="hidden btn-ide btn-ide-secondary">
+        <span class="icon"></span> Adicionar cenário
       </button>
-      <button id="btnSelecionarTodos" style="display: none;" class="hidden">
-        <span class="icon">✅</span> Selecionar todos
+      <button id="btnSelecionarTodos" style="display: none;" class="hidden btn-ide btn-ide-secondary">
+        <span class="icon"></span> Selecionar todos
       </button>
-      <button id="btnEnviarIA" style="display: none;" class="hidden">
-        <span class="icon">📤</span> Criar cenarios no Zephyr
+      <button id="btnEnviarIA" style="display: none;" class="hidden btn-ide btn-ide-primary">
+        <span class="icon"></span> Criar cenários no Zephyr
       </button>
-      <button id="btnEnviarAtualizacaoIA" style="display: none;" class="hidden">
-        <span class="icon">📤</span> Sincronizar com Zephyr
+      <button id="btnEnviarAtualizacaoIA" style="display: none;" class="hidden btn-ide btn-ide-secondary">
+        <span class="icon"></span> Sincronizar com Zephyr
       </button>
-      <button id="btnCriarScripts" style="display: none;" class="hidden">
-        <span class="icon">🤖</span> Criar Scripts
+      <button id="btnCriarScripts" style="display: none;" class="hidden btn-ide btn-ide-ghost">
+        <span class="icon"></span> Criar scripts
       </button>
     </div>
   
     <!-- Formulário (padrão backend) -->
-    <form id="formulario" class="form">
-      <div class="form__row">
+    <form id="formulario" class="form plugin-section zephyr-form-shell">
+      <div class="plugin-section-title">Gerar arquivo .feature</div>
+      <div class="form__row plugin-field">
         <label>Nome da Feature:</label>
         <input type="text" id="featureName" placeholder="Ex.: Onboarding Gluon" />
       </div>
-      <div class="form__row">
+      <div class="form__row plugin-field">
         <label>Rule (opcional):</label>
         <textarea id="ruleName" placeholder="Ex.: Regra opcional aqui" rows="3"></textarea>
       </div>
-      <div class="form__row">
+      <div class="form__row plugin-field">
         <label>Nome do arquivo:</label>
         <input type="text" id="fileBaseName" placeholder="Ex.: TRBC-25284 ou onboarding (sem .feature)" />
       </div>
-      <div class="form__row">
+      <div class="form__row plugin-field">
         <label>Tribo:</label>
         <input type="text" id="tribeName" placeholder="Ex.: contratos" />
       </div>
-      <div class="form__row">
+      <div class="form__row plugin-field">
         <label>Tags extras:</label>
         <input type="text" id="extraTags" placeholder="Ex.: @regressivo @rest @autorFulano" />
       </div>
-      <div class="form__row">
-        <label>📁 Pasta de destino:</label>
+      <div class="form__row plugin-field">
+        <label>Pasta de destino:</label>
         <div>
-          <button id="selecionarPasta" type="button" class="hidden"><span>Selecionar pasta</span></button>
+          <button id="selecionarPasta" type="button" class="hidden btn-ide btn-ide-secondary"><span>Selecionar pasta</span></button>
           <span id="pastaSelecionada" class="info"></span>
         </div>
       </div>
       <div class="note">As opções acima serão usadas como metadados do arquivo .feature (cabeçalho e tags) e para o nome do arquivo.</div>
-      <button class="btn--full" type="submit">🚀 Gerar arquivo .feature</button>
+      <button class="btn--full btn-ide btn-ide-primary" type="submit">Gerar arquivo .feature</button>
       <div id="formError" class="error">Preencha ao menos o nome do arquivo ou selecione uma pasta.</div>
       <div id="stepsFeedback" style="margin-top:12px"></div>
     </form>
   
-    <div id="iaLoading">🔍 A IA está analisando os cenários...</div>
+    <div id="iaLoading">A IA está analisando os cenários...</div>
   </div>
   
   <!-- Carrega o JS externo (se fornecido) -->

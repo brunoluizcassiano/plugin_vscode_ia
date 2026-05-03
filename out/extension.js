@@ -38,13 +38,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.activate = void 0;
 const node_fetch_1 = __importDefault(require("node-fetch"));
 const vscode = __importStar(require("vscode"));
-const homeViewProvider_1 = require("./homeViewProvider");
+const homeViewProvider_1 = require("./view/home/homeViewProvider");
 const jiraPanel_1 = require("./panel/jiraPanel");
 const zephyrPanel_1 = require("./panel/zephyrPanel");
 const backendPanel_1 = require("./panel/backendPanel");
 const settingsPanel_1 = require("./panel/settingsPanel");
-const copilotLmBridge_1 = require("./copilot/copilotLmBridge");
-const prompts_1 = require("./prompts");
+const languageModelBridge_1 = require("./ai/model/languageModelBridge");
+const prompts_1 = require("./ai/prompts");
 let globalToken = null;
 let globalThreadId = null;
 // === GitHub Login: helpers/estado ===
@@ -53,17 +53,29 @@ let ghStatusItem;
 function getStoredGitHubUser(context) {
     return context.globalState.get('plugin.github.user');
 }
-function fetchGitHubUser(accessToken) {
+function getGitHubUserFromSession(session) {
+    const label = String(session.account.label || '').trim();
+    const looksLikeEmail = label.includes('@');
+    return {
+        login: label || session.account.id,
+        name: looksLikeEmail ? undefined : label || undefined,
+        email: looksLikeEmail ? label : undefined,
+    };
+}
+function fetchGitHubUser(session) {
     var _a;
     return __awaiter(this, void 0, void 0, function* () {
-        const headers = { Authorization: `Bearer ${accessToken}`, Accept: 'application/vnd.github+json' };
+        const headers = { Authorization: `Bearer ${session.accessToken}`, Accept: 'application/vnd.github+json' };
         const userRes = yield (0, node_fetch_1.default)('https://api.github.com/user', { headers });
-        if (!userRes.ok)
+        if (!userRes.ok) {
+            if (userRes.status === 401 || userRes.status === 403) {
+                return getGitHubUserFromSession(session);
+            }
             throw new Error(`Falha ao obter usuário do GitHub: ${userRes.status}`);
+        }
         const user = yield userRes.json();
         let email = user.email;
         if (!email) {
-            // tenta buscar e-mail primário (público/privado)
             const emailRes = yield (0, node_fetch_1.default)('https://api.github.com/user/emails', { headers });
             if (emailRes.ok) {
                 const emails = yield emailRes.json();
@@ -132,10 +144,10 @@ function identifyGitHubOnStartup(context) {
                 }
             }
             if (session) {
-                const ghUser = yield fetchGitHubUser(session.accessToken);
+                const ghUser = yield fetchGitHubUser(session);
                 yield context.globalState.update('plugin.github.user', ghUser);
-                console.log('🔐 GitHub conectado como:', ghUser.login);
-                console.log('🔐 GitHub conectado com accessToken:', session.accessToken);
+                console.log('&#x1f510; GitHub conectado como:', ghUser.login);
+                console.log('&#x1f510; GitHub conectado com accessToken:', session.accessToken);
                 showOrUpdateGitHubStatus(ghUser);
             }
             else {
@@ -178,6 +190,12 @@ function tryResolveZephyrProject(input) {
         zephyrKey: String(raw.zephyrKey || jiraKey).toUpperCase(),
         zephyrProjectId: raw.zephyrProjectId
     };
+}
+function resolveZephyrProjectOrThrow(originLabel, issueOrProject) {
+    const project = tryResolveZephyrProject(issueOrProject !== null && issueOrProject !== void 0 ? issueOrProject : '');
+    if (project)
+        return project;
+    throw new Error(`[${originLabel}] Não foi possível resolver o projeto Zephyr a partir de "${issueOrProject !== null && issueOrProject !== void 0 ? issueOrProject : ''}".`);
 }
 /** Se não der para resolver, pergunta ao usuário (input + botões). */
 function resolveProjectOrPrompt(originLabel, issueOrProject) {
@@ -268,6 +286,23 @@ function activate(context) {
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.settings', () => {
             settingsPanel_1.SettingsPanel.createOrShow(context.extensionUri);
         }));
+        context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.refreshGitHubSession', () => __awaiter(this, void 0, void 0, function* () {
+            try {
+                const session = yield ensureGitHubSession({ interactive: true });
+                if (!session) {
+                    yield context.globalState.update('plugin.github.user', undefined);
+                    showOrUpdateGitHubStatus(undefined);
+                    return;
+                }
+                const ghUser = yield fetchGitHubUser(session);
+                yield context.globalState.update('plugin.github.user', ghUser);
+                showOrUpdateGitHubStatus(ghUser);
+            }
+            catch (err) {
+                vscode.window.showErrorMessage(`Erro ao atualizar sessão do GitHub: ${(err === null || err === void 0 ? void 0 : err.message) || err}`);
+                showOrUpdateGitHubStatus(getStoredGitHubUser(context));
+            }
+        })));
         // Comando para obter o nome do usuário logado no Jira
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.getJiraUser', () => __awaiter(this, void 0, void 0, function* () {
             const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
@@ -316,7 +351,7 @@ function activate(context) {
                 return [];
             }
         })));
-        // ✅ Método para enviar comentário para a issue:
+        //Método para enviar comentário para a issue:
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.enviarComentarioIssue', (issueKey, comentario) => __awaiter(this, void 0, void 0, function* () {
             const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
             const auth = encodeAuth(jiraEmail, jiraToken);
@@ -344,7 +379,7 @@ function activate(context) {
                 vscode.window.showErrorMessage(`❌ Falha ao enviar comentário para a issue ${issueKey}: ${err.message}`);
             }
         })));
-        // 🔍 Comando para buscar sugestões de issues com base no summary
+        //Comando para buscar sugestões de issues com base no summary
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.buscarSugestoesIssue', (texto, projectKey) => __awaiter(this, void 0, void 0, function* () {
             const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
             const auth = encodeAuth(jiraEmail, jiraToken);
@@ -385,7 +420,7 @@ function activate(context) {
                 return [];
             }
         })));
-        // ✅ Novo comando: buscar detalhes completos da issue
+        // Novo comando: buscar detalhes completos da issue
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.getJiraIssue', (issueKey) => __awaiter(this, void 0, void 0, function* () {
             var _a, _b, _c;
             const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
@@ -402,7 +437,7 @@ function activate(context) {
                 if (!response.ok)
                     return null;
                 const data = yield response.json();
-                // ✅ Verificar se o tipo da issue é permitido
+                // Verificar se o tipo da issue é permitido
                 const tipo = data.fields.issuetype.name;
                 const tiposPermitidos = ['Functionality', 'Funcionalidade', 'Epic', 'Story', "História"];
                 if (!tiposPermitidos.includes(tipo)) {
@@ -445,9 +480,25 @@ function activate(context) {
                         'Accept': 'application/json',
                     }
                 });
+                console.log('&#x1f50d; Zephyr issuelinks status:', zephyrRes.status, zephyrRes.statusText, 'issueKey=', issueKey);
                 if (zephyrRes.ok) {
                     zephyrData = yield zephyrRes.json();
-                    console.log('🔍 Dados do zephyr:', JSON.stringify(zephyrData, null, 2));
+                    console.log('&#x1f50d; Dados do zephyr:', JSON.stringify(zephyrData, null, 2));
+                    console.log('&#x1f50d; Zephyr issuelinks shape:', Array.isArray(zephyrData)
+                        ? { root: 'array', count: zephyrData.length }
+                        : {
+                            root: typeof zephyrData,
+                            keys: Object.keys(zephyrData || {}),
+                            valuesCount: Array.isArray(zephyrData === null || zephyrData === void 0 ? void 0 : zephyrData.values) ? zephyrData.values.length : null,
+                            itemsCount: Array.isArray(zephyrData === null || zephyrData === void 0 ? void 0 : zephyrData.items) ? zephyrData.items.length : null,
+                            contentCount: Array.isArray(zephyrData === null || zephyrData === void 0 ? void 0 : zephyrData.content) ? zephyrData.content.length : null,
+                            resultsCount: Array.isArray(zephyrData === null || zephyrData === void 0 ? void 0 : zephyrData.results) ? zephyrData.results.length : null,
+                            testCasesCount: Array.isArray(zephyrData === null || zephyrData === void 0 ? void 0 : zephyrData.testCases) ? zephyrData.testCases.length : null,
+                            testcasesCount: Array.isArray(zephyrData === null || zephyrData === void 0 ? void 0 : zephyrData.testcases) ? zephyrData.testcases.length : null,
+                        });
+                }
+                else {
+                    console.warn('⚠️ Zephyr issuelinks request failed for', issueKey, 'status=', zephyrRes.status, zephyrRes.statusText);
                 }
             }
             catch (zephyrErr) {
@@ -506,18 +557,27 @@ function activate(context) {
                 }
                 return scripts;
             });
-            const testcases = Array.isArray(zephyrData) ? zephyrData : [];
+            const testcases = Array.isArray(zephyrData)
+                ? zephyrData
+                : Array.isArray(zephyrData === null || zephyrData === void 0 ? void 0 : zephyrData.values)
+                    ? zephyrData.values
+                    : Array.isArray(zephyrData === null || zephyrData === void 0 ? void 0 : zephyrData.items)
+                        ? zephyrData.items
+                        : Array.isArray(zephyrData === null || zephyrData === void 0 ? void 0 : zephyrData.content)
+                            ? zephyrData.content
+                            : [];
+            console.log('&#x1f50d; Zephyr issuelinks normalized testcases count:', testcases.length);
             const testesZephyr = yield fetchTestScripts(testcases);
-            console.log('🔍 Dados do zephyr:', JSON.stringify(testesZephyr, null, 2));
+            console.log('&#x1f50d; Dados do zephyr:', JSON.stringify(testesZephyr, null, 2));
             // Retorno final com todos os dados da issue e scripts
             return {
                 key: issueKey,
                 testesZephyr,
             };
         })));
-        // 🔎 Estrutura de pastas do Zephyr por projectKey
+        // Estrutura de pastas do Zephyr por projectKey
         context.subscriptions.push(
-        // 🔎 Estrutura de pastas do Zephyr por projectKey (sem resolver ID)
+        // &#x1f50e; Estrutura de pastas do Zephyr por projectKey (sem resolver ID)
         vscode.commands.registerCommand('plugin-vscode.getZephyrFoldersByProject', (projectKeyParam) => __awaiter(this, void 0, void 0, function* () {
             const { zephyrToken, zephyrDomain } = getZephyrSettings();
             try {
@@ -525,6 +585,7 @@ function activate(context) {
                 const projectKey = yield resolveProjectOrPrompt('Listar pastas', projectKeyParam);
                 if (!projectKey)
                     throw new Error('Project key não informada.');
+                const requestedProjectKey = jiraKeyFrom(projectKeyParam);
                 let startAt = 0;
                 const maxResults = 100;
                 let isLast = false;
@@ -533,7 +594,7 @@ function activate(context) {
                     const base = `https://${zephyrDomain}/v2/folders`;
                     const url = withProjectParam(base, projectKey) +
                         `&maxResults=${maxResults}&startAt=${startAt}&folderType=TEST_CASE`;
-                    console.log('🔍 Zephyr folders URL:', url);
+                    console.log('&#x1f50d; Zephyr folders URL:', url);
                     const res = yield (0, node_fetch_1.default)(url, {
                         headers: {
                             'Authorization': `Bearer ${zephyrToken}`,
@@ -569,11 +630,11 @@ function activate(context) {
                         roots.push(node);
                     }
                 });
-                return { projectKey, folders: roots, flat: allFolders };
+                return { requestedProjectKey, projectKey: projectKey.zephyrKey, project: projectKey, folders: roots, flat: allFolders };
             }
             catch (err) {
                 vscode.window.showErrorMessage(`Erro ao carregar pastas do Zephyr: ${err.message}`);
-                return { projectKey: '', folders: [], flat: [] };
+                return { requestedProjectKey: '', projectKey: '', project: null, folders: [], flat: [] };
             }
         })));
         // Lista os testes de uma pasta do Zephyr (sem recursão por padrão)
@@ -604,7 +665,7 @@ function activate(context) {
                         `&folderId=${encodeURIComponent(String(folderId))}` +
                         `&maxResults=${maxResults}` +
                         `&startAt=${startAt}`;
-                    console.log('🔍 Zephyr folders URL:', url);
+                    console.log('&#x1f50d; Zephyr folders URL:', url);
                     const res = yield (0, node_fetch_1.default)(url, {
                         headers: {
                             'Authorization': `Bearer ${zephyrToken}`,
@@ -675,7 +736,7 @@ function activate(context) {
             // 3) Retorna para o panel (quem chamou via executeCommand)
             return out;
         })));
-        // ✅ Novo comando: buscar detalhes completos da issue
+        // Novo comando: buscar detalhes completos da issue
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.getJiraIssueDetails', (issueKey) => __awaiter(this, void 0, void 0, function* () {
             var _g, _h, _j;
             const { jiraDomain, jiraEmail, jiraToken } = getJiraSettings();
@@ -692,7 +753,7 @@ function activate(context) {
                 if (!response.ok)
                     return null;
                 const data = yield response.json();
-                console.log('🔍 Dados da issue:', JSON.stringify(data, null, 2));
+                console.log('&#x1f50d; Dados da issue:', JSON.stringify(data, null, 2));
                 // Buscar testes vinculados no Zephyr
                 let zephyrData = { values: [] };
                 try {
@@ -705,7 +766,7 @@ function activate(context) {
                     });
                     if (zephyrRes.ok) {
                         zephyrData = yield zephyrRes.json();
-                        console.log('🔍 Dados do zephyr:', JSON.stringify(zephyrData, null, 2));
+                        console.log('&#x1f50d; Dados do zephyr:', JSON.stringify(zephyrData, null, 2));
                     }
                 }
                 catch (zephyrErr) {
@@ -771,50 +832,52 @@ function activate(context) {
                 return null;
             }
         })));
-        // 🔍 Análise Story, Epic e Func com IA QA (Copilot)
+        // Análise Story, Epic e Func com IA QA (Copilot)
         vscode.commands.registerCommand('plugin-vscode.analiseIaQa', (description, bdd) => __awaiter(this, void 0, void 0, function* () {
             try {
                 const prompt = (0, prompts_1.buildAnaliseStoryEpicFunPrompt)({ description, bdd });
-                return yield (0, copilotLmBridge_1.askCopilotLm)(prompt, {});
+                return yield (0, languageModelBridge_1.askLanguageModel)(prompt, {});
             }
             catch (error) {
                 vscode.window.showErrorMessage(`Erro ao consultar IA: ${error.message}`);
                 return '❌ Erro ao obter resposta da IA.';
             }
         }));
-        // 🔍 Análise cenarios com IA QA (Copilot)
+        // Análise cenarios com IA QA (Copilot)
         vscode.commands.registerCommand('plugin-vscode.analiseCenariosIaQa', (userStory, cenario) => __awaiter(this, void 0, void 0, function* () {
             try {
                 const prompt = (0, prompts_1.buildAnaliseCenarioPrompt)({ userStory, cenarioOriginal: cenario });
-                return yield (0, copilotLmBridge_1.askCopilotLm)(prompt, {});
+                return yield (0, languageModelBridge_1.askLanguageModel)(prompt, {});
             }
             catch (error) {
                 vscode.window.showErrorMessage(`Erro ao consultar IA: ${error.message}`);
                 return '❌ Erro ao obter resposta da IA.';
             }
         }));
-        // 🔍 Criar cenarios com IA QA (Copilot)
+        // Criar cenarios com IA QA (Copilot)
         vscode.commands.registerCommand('plugin-vscode.criarCenariosIaQa', (userStory, cenario) => __awaiter(this, void 0, void 0, function* () {
             try {
                 const prompt = (0, prompts_1.buildCriarCenariosPrompt)({ userStory });
-                return yield (0, copilotLmBridge_1.askCopilotLm)(prompt, {});
+                return yield (0, languageModelBridge_1.askLanguageModel)(prompt, {});
             }
             catch (error) {
                 vscode.window.showErrorMessage(`Erro ao consultar IA: ${error.message}`);
                 return '❌ Erro ao obter resposta da IA.';
             }
         }));
-        // ✅ Novo comando: Criar test case no Zephyr
+        // Novo comando: Criar test case no Zephyr
         context.subscriptions.push(vscode.commands.registerCommand('plugin-vscode.criarTesteZephyr', (texto, issueId, issueKey, automationStatus, testClass, testType, testGroup, folderId) => __awaiter(this, void 0, void 0, function* () {
             const { zephyrOwnerId, zephyrToken, zephyrDomain } = getZephyrSettings();
             const url = `https://${zephyrDomain}/v2/testcases`;
-            console.log('🔍 issueId: ', issueId);
-            console.log('🔍 titulo do teste: ', texto.split('\n')[0].replace(/^Scenario:/i, '').trim());
-            console.log('🔍 projectKey: ', issueKey);
-            console.log('🔍 automationStatus: ', automationStatus.trim().replace(/\s+/g, ' '));
-            console.log('🔍 testClass: ', testClass.trim().replace(/\s+/g, ' '));
-            console.log('🔍 testType: ', testType.trim().replace(/\s+/g, ' '));
-            console.log('🔍 testGroup: ', testGroup.trim().replace(/\s+/g, ' '));
+            const project = resolveZephyrProjectOrThrow('Criar teste Zephyr', issueKey);
+            console.log('&#x1f50d; issueId: ', issueId);
+            console.log('&#x1f50d; titulo do teste: ', texto.split('\n')[0].replace(/^Scenario:/i, '').trim());
+            console.log('&#x1f50d; projectKey: ', issueKey);
+            console.log('&#x1f50d; projectKey resolvido para Zephyr: ', project.zephyrKey);
+            console.log('&#x1f50d; automationStatus: ', automationStatus.trim().replace(/\s+/g, ' '));
+            console.log('&#x1f50d; testClass: ', testClass.trim().replace(/\s+/g, ' '));
+            console.log('&#x1f50d; testType: ', testType.trim().replace(/\s+/g, ' '));
+            console.log('&#x1f50d; testGroup: ', testGroup.trim().replace(/\s+/g, ' '));
             // Buscar testes vinculados no Zephyr
             let zephyrData = { values: [] };
             let zephyrScriptData = { values: [] };
@@ -828,7 +891,7 @@ function activate(context) {
                     },
                     body: JSON.stringify({
                         name: texto.split('\n')[0].replace(/^Scenario:/i, '').trim(),
-                        projectKey: issueKey.slice(0, 4),
+                        projectKey: project.zephyrKey,
                         folderId: folderId,
                         ownerId: zephyrOwnerId,
                         customFields: {
@@ -841,18 +904,18 @@ function activate(context) {
                 });
                 if (zephyrRes.ok) {
                     zephyrData = yield zephyrRes.json();
-                    console.log('🔍 Dados do zephyr new test case:', JSON.stringify(zephyrData, null, 2));
+                    console.log('&#x1f50d; Dados do zephyr new test case:', JSON.stringify(zephyrData, null, 2));
                 }
                 else {
-                    console.log('🔍 zephyrRes: ', zephyrRes);
+                    console.log('&#x1f50d; zephyrRes: ', zephyrRes);
                 }
             }
             catch (zephyrErr) {
                 console.warn('Erro ao buscar testes no Zephyr:', zephyrErr.message);
             }
-            console.log('🔍 Dados do zephyr:', JSON.stringify(zephyrData, null, 2));
+            console.log('&#x1f50d; Dados do zephyr:', JSON.stringify(zephyrData, null, 2));
             const semPrimeira = texto.split('\n').slice(1).join('\n');
-            console.log('🔍 Texto:', semPrimeira);
+            console.log('&#x1f50d; Texto:', semPrimeira);
             try {
                 const zephyrLink = yield (0, node_fetch_1.default)(`${url}/${zephyrData.key}/links/issues`, {
                     method: 'POST',
@@ -866,8 +929,8 @@ function activate(context) {
                     }),
                 });
                 const zephyrLinkData = zephyrLink.json();
-                console.log('🔍 issueId:', issueId);
-                console.log('🔍 link:', JSON.stringify(zephyrLinkData, null, 2));
+                console.log('&#x1f50d; issueId:', issueId);
+                console.log('&#x1f50d; link:', JSON.stringify(zephyrLinkData, null, 2));
             }
             catch (zephyrErr) {
                 console.warn('Erro ao buscar testes no Zephyr:', zephyrErr.message);
@@ -896,14 +959,14 @@ function activate(context) {
         vscode.commands.registerCommand('plugin-vscode.atualizarTesteZephyr', (key, texto, issueId, issueKey) => __awaiter(this, void 0, void 0, function* () {
             const { zephyrOwnerId, zephyrToken, zephyrDomain } = getZephyrSettings();
             const url = `https://${zephyrDomain}/v2/testcases`;
-            console.log('🔍 issueId: ', issueId);
-            console.log('🔍 titulo do teste: ', texto.split('\n')[0].replace(/^Scenario:/i, '').trim());
-            console.log('🔍 projectKey: ', issueKey);
+            console.log('&#x1f50d; issueId: ', issueId);
+            console.log('&#x1f50d; titulo do teste: ', texto.split('\n')[0].replace(/^Scenario:/i, '').trim());
+            console.log('&#x1f50d; projectKey: ', issueKey);
             // Buscar testes vinculados no Zephyr
             let zephyrData = { values: [] };
             let zephyrScriptData = { values: [] };
             const semPrimeira = texto.split('\n').slice(1).join('\n');
-            console.log('🔍 Texto:', semPrimeira);
+            console.log('&#x1f50d; Texto:', semPrimeira);
             try {
                 const zephyrRes = yield (0, node_fetch_1.default)(`${url}/${key}/testscript`, {
                     method: 'POST',
@@ -941,12 +1004,11 @@ function activate(context) {
                     // projectKey ou projectId + outros params
                     const url = withProjectParam(base, project) +
                         `&maxResults=${maxResults}&startAt=${startAt}&folderType=TEST_CASE`;
-                    console.log('🔍 Zephyr folders URL:', url);
+                    console.log('&#x1f50d; Zephyr folders URL:', url);
                     const zephyrRes = yield (0, node_fetch_1.default)(url, {
                         headers: {
                             'Authorization': `Bearer ${zephyrToken}`,
                             'Content-Type': 'application/json',
-                            'Accept': 'application/json',
                         }
                     });
                     const zephyrData = yield zephyrRes.json();
@@ -959,7 +1021,7 @@ function activate(context) {
                     isLast = zephyrData.isLast;
                     startAt += maxResults;
                 }
-                console.log('🔍 Dados do zephyr folders:', allFolders);
+                console.log('&#x1f50d; Dados do zephyr folders:', allFolders);
                 return allFolders;
             }
             catch (err) {

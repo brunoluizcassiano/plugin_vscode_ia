@@ -35,18 +35,34 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.JiraPanel = void 0;
 const vscode = __importStar(require("vscode"));
 const jiraView_1 = require("../view/jira/jiraView");
+function getNonce() {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++)
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    return text;
+}
 class JiraPanel {
     constructor(panel, extensionUri) {
         this._panel = panel;
         this._extensionUri = extensionUri;
-        this._panel.webview.html = (0, jiraView_1.getJiraViewContent)();
-        // 🎧 Ouvindo mensagens do HTML
+        const webview = this._panel.webview;
+        const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'style', 'style.css'));
+        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'jira', 'jira.js'));
+        const nonce = getNonce();
+        this._panel.webview.html = (0, jiraView_1.getJiraViewContent)({
+            webview,
+            nonce,
+            styleUri: String(styleUri),
+            scriptUri: String(scriptUri)
+        });
+        // &#x1f3a7; Ouvindo mensagens do HTML
         this._panel.webview.onDidReceiveMessage(this.handleMessage.bind(this));
-        // 🧹 Limpa referência ao fechar
+        // &#x1f9f9; Limpa referência ao fechar
         this._panel.onDidDispose(() => {
             JiraPanel.currentPanel = undefined;
         });
-        // 🚀 Envia nome do usuário assim que carrega
+        // &#x1f680; Envia nome do usuário assim que carrega
         this.sendNomeUsuario();
     }
     static createOrShow(extensionUri) {
@@ -55,7 +71,10 @@ class JiraPanel {
                 JiraPanel.currentPanel._panel.reveal();
             }
             else {
-                const panel = vscode.window.createWebviewPanel('jiraView', 'Jira', vscode.ViewColumn.One, { enableScripts: true });
+                const panel = vscode.window.createWebviewPanel('jiraView', 'Jira', vscode.ViewColumn.One, {
+                    enableScripts: true,
+                    localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'media')]
+                });
                 JiraPanel.currentPanel = new JiraPanel(panel, extensionUri);
             }
         });
@@ -132,7 +151,7 @@ class JiraPanel {
                 case 'buscarIssue': {
                     const { key } = message;
                     const issue = yield vscode.commands.executeCommand('plugin-vscode.getJiraIssue', key);
-                    console.log('🔍 Resultado da issue:', issue);
+                    console.log('&#x1f50d; Resultado da issue:', issue);
                     if (issue && typeof issue === 'object' && 'key' in issue) {
                         this._panel.webview.postMessage({ type: 'detalhesIssue', issue });
                     }
@@ -147,7 +166,7 @@ class JiraPanel {
                 case 'analisarIA': {
                     try {
                         const response = yield vscode.commands.executeCommand('plugin-vscode.analiseIaQa', message.description, message.bdd);
-                        const aiText = (typeof response === 'string' ? response : (response === null || response === void 0 ? void 0 : response.message) || '').trim() || 'Sem resposta da IA.';
+                        const aiText = typeof response === 'string' ? response : (response === null || response === void 0 ? void 0 : response.message) || 'Sem resposta da IA.';
                         const parsed = this.tryExtractJsonObject(aiText);
                         // Compatível: sempre manda "resultado" (string). Se parsear, manda também resultadoJson.
                         this._panel.webview.postMessage({

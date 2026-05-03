@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { getZephyrViewContent } from '../view/zephyr/zephyrView';
 import { generateFeatures } from '../generators/features/featureGenerator';
-import { generateSteps  }    from '../generators/steps/stepsGenerator';
+import { generateSteps } from '../generators/steps/stepsGenerator';
 import path from 'path';
 
 type Selecionado = {
@@ -58,30 +58,165 @@ function applyZephyrSelectFilters(rawTests: any[], filtros: any): any[] {
 
   const sel = {
     automationStatus: _zNorm((filtros as any).automationStatus),
-    testType:         _zNorm((filtros as any).testType),
-    testClass:        _zNorm((filtros as any).testClass),
-    testGroup:        _zNorm((filtros as any).testGroup),
+    testType: _zNorm((filtros as any).testType),
+    testClass: _zNorm((filtros as any).testClass),
+    testGroup: _zNorm((filtros as any).testGroup),
   };
   const use = (val: string) => (val && val.toUpperCase() !== 'N/A');
 
   const out: any[] = [];
   for (const t of rawTests) {
-    const aut    = _zNormAutomation(_zFrom(t, ['automationStatus','automation','automated'], ['Automation status','Automation Status','Automação']));
-    const ttype  = _zFrom(t, ['testType','type'], ['Test Type','Tipo']);
-    const tclass = _zFrom(t, ['testClass','class'], ['Test Class','Classe']);
-    const tgroup = _zFrom(t, ['testGroup','group'], ['Test Group','Grupo']);
+    const aut = _zNormAutomation(_zFrom(t, ['automationStatus', 'automation', 'automated'], ['Automation status', 'Automation Status', 'Automação']));
+    const ttype = _zFrom(t, ['testType', 'type'], ['Test Type', 'Tipo']);
+    const tclass = _zFrom(t, ['testClass', 'class'], ['Test Class', 'Classe']);
+    const tgroup = _zFrom(t, ['testGroup', 'group'], ['Test Group', 'Grupo']);
 
     if (use(sel.automationStatus)) {
       const want = _zNormAutomation(sel.automationStatus);
       if (!want || want !== aut) continue;
     }
-    if (use(sel.testType)  && !_zEqualsCi(ttype,  sel.testType))  continue;
+    if (use(sel.testType) && !_zEqualsCi(ttype, sel.testType)) continue;
     if (use(sel.testClass) && !_zEqualsCi(tclass, sel.testClass)) continue;
     if (use(sel.testGroup) && !_zEqualsCi(tgroup, sel.testGroup)) continue;
 
     out.push(t);
   }
   return out;
+}
+
+// ===========================
+// NOVO: suporte a saída JSON consistente do prompt criarCenarios
+// (mantém compatibilidade com o formato antigo em texto)
+// ===========================
+type IAParsedScenario = {
+  titulo?: string;
+  testType?: string;
+  testClass?: string;
+  testGroup?: string;
+  gherkin?: string; // conteúdo interno do bloco (sem ```gherkin```), com Scenario/Given/When/Then
+};
+
+type IAAnaliseCenarioJson = {
+  meta?: { versao_schema?: string; idioma?: string };
+  classificacao_tipo_teste?: string;
+  cobre_user_story?: boolean;
+  avaliacao_cobertura?: string;
+  pontos_tecnicos_ou_termos_inadequados?: string[];
+  cenario_reescrito_gherkin?: string;
+};
+
+function parseAnaliseCenarioJson(raw: string): IAAnaliseCenarioJson | null {
+  const json = tryParseJsonLoose(raw);
+  if (!json || typeof json !== 'object') return null;
+
+  // Heurística: precisa ter pelo menos a chave do gherkin reescrito
+  if (!('cenario_reescrito_gherkin' in json)) return null;
+  return json as IAAnaliseCenarioJson;
+}
+
+function normalizeAnaliseCenarioRespostaToSugestao(raw: string): { sugestao: string } {
+  const parsed = parseAnaliseCenarioJson(raw);
+  if (parsed?.cenario_reescrito_gherkin && typeof parsed.cenario_reescrito_gherkin === 'string') {
+    // transforma ```gherkin ...``` em texto interno do cenário (como a UX já usa)
+    return { sugestao: extractScenarioTextFromGherkinBlock(parsed.cenario_reescrito_gherkin) };
+  }
+  // fallback legado
+  return { sugestao: raw };
+}
+
+function tryParseJsonLoose(raw: string): any | null {
+  if (!raw) return null;
+
+  // 1) tenta direto
+  try { return JSON.parse(raw); } catch { }
+
+  // 2) tenta extrair do primeiro { ao último }
+  const a = raw.indexOf('{');
+  const b = raw.lastIndexOf('}');
+  if (a >= 0 && b > a) {
+    const candidate = raw.slice(a, b + 1);
+    try { return JSON.parse(candidate); } catch { }
+  }
+  return null;
+}
+
+function extractScenarioTextFromGherkinBlock(block: string): string {
+  const m = block.match(/```gherkin\s*([\s\S]*?)```/i);
+  if (!m) return block.trim();
+  return m[1]
+    .split('\n')
+    .map(l => l.trimStart())
+    .filter(l => l.trim() !== '')
+    .join('\n')
+    .trim();
+}
+
+function parseCriarCenariosJsonSchema(raw: string): IAParsedScenario[] | null {
+  const json = tryParseJsonLoose(raw);
+  if (!json || !Array.isArray(json.cenarios)) return null;
+
+  return json.cenarios.map((c: any, idx: number) => {
+    const gherkinRaw = typeof c?.gherkin === 'string' ? c.gherkin : '';
+    const gherkin = extractScenarioTextFromGherkinBlock(gherkinRaw);
+
+    return {
+      titulo: c?.titulo || `Cenário ${idx + 1}`,
+      testType: c?.test_type || '',
+      testClass: c?.test_class || '',
+      testGroup: c?.test_group || '',
+      gherkin,
+    };
+  });
+}
+
+function buildSugestoesIAFromResposta(
+  respostaRaw: string,
+  extrairTodosCenariosGherkin: (texto: string) => string[],
+  extractTestType: (texto: string) => string[],
+  extractTestClass: (texto: string) => string[],
+  extractTestGroup: (texto: string) => string[]
+): { key: string; sugestao: string; testType?: string; testClass?: string; testGroup?: string }[] {
+
+  // 1) formato novo (JSON)
+  const parsed = parseCriarCenariosJsonSchema(respostaRaw);
+  if (parsed && parsed.length) {
+    return parsed.map((c, idx) => ({
+      key: `cenario-gerado-${idx + 1}`,
+      sugestao: c.gherkin || '',
+      testType: c.testType || '',
+      testClass: c.testClass || '',
+      testGroup: c.testGroup || '',
+    }));
+  }
+
+  // 2) fallback: formato antigo (texto)
+  const sugestoesIA: any[] = [];
+  if (respostaRaw.includes('Scenario:')) {
+    const cenariosSeparados = extrairTodosCenariosGherkin(respostaRaw);
+    const testTypes = extractTestType(respostaRaw);
+    const testClasses = extractTestClass(respostaRaw);
+    const testGroups = extractTestGroup(respostaRaw);
+
+    cenariosSeparados.forEach((texto, idx) => {
+      sugestoesIA.push({
+        key: `cenario-gerado-${idx + 1}`,
+        sugestao: texto,
+        testType: testTypes[idx] || '',
+        testClass: testClasses[idx] || '',
+        testGroup: testGroups[idx] || ''
+      });
+    });
+    return sugestoesIA;
+  }
+
+  // 3) fallback final: cenário único
+  return [{
+    key: 'cenario-unico',
+    sugestao: respostaRaw,
+    testType: extractTestType(respostaRaw)[0] || '',
+    testClass: extractTestClass(respostaRaw)[0] || '',
+    testGroup: extractTestGroup(respostaRaw)[0] || ''
+  }];
 }
 
 export class ZephyrPanel {
@@ -100,7 +235,7 @@ export class ZephyrPanel {
     const webview = this._panel.webview;
 
     // Gera URIs seguros para os assets da webview
-    const styleUri  = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'style', 'style.css'));
+    const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'style', 'style.css'));
     // Opcional: se mover o JS inline para arquivo externo
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'zephyr', 'zephyr.js'));
     const nonce = getNonce();
@@ -112,9 +247,9 @@ export class ZephyrPanel {
       styleUri: String(styleUri),
       scriptUri: String(scriptUri)
     });
-    // 🎧 Ouvindo mensagens do HTML
+    // &#x1f3a7; Ouvindo mensagens do HTML
     this._panel.webview.onDidReceiveMessage(this.handleMessage.bind(this));
-    // 🧹 Limpa referência ao fechar
+    // &#x1f9f9; Limpa referência ao fechar
     this._panel.onDidDispose(() => {
       ZephyrPanel.currentPanel = undefined;
     });
@@ -174,7 +309,7 @@ export class ZephyrPanel {
       if (message.type === 'analisarIA') {
         try {
           const testes = message.testes || [];
-          const sugestoesIA = [];
+          const sugestoesIA: any[] = [];
           if (testes.length === 0) {
             const resposta = await vscode.commands.executeCommand<any>(
               'plugin-vscode.criarCenariosIaQa',
@@ -182,34 +317,18 @@ export class ZephyrPanel {
               testes || ''
             );
             const respostaRaw = typeof resposta === 'string' ? resposta : (resposta?.message || 'Sem resposta da IA.');
-            // Detectar se existem múltiplos cenários Gherkin
-            if (respostaRaw.includes('Scenario:')) {
-              const cenariosSeparados = extrairTodosCenariosGherkin(respostaRaw);
-              const testTypes = extractTestType(respostaRaw);
-              const testClasses = extractTestClass(respostaRaw);
-              const testGroups = extractTestGroup(respostaRaw);
-              cenariosSeparados.forEach((texto, idx) => {
-                sugestoesIA.push({
-                  key: `cenario-gerado-${idx + 1}`,
-                  sugestao: texto,
-                  testType: testTypes[idx] || '',
-                  testClass: testClasses[idx] || '',
-                  testGroup: testGroups[idx] || ''
-                });
-                console.log(`Cenário: ${texto}`);
-                console.log(`Type: ${testTypes[idx]}`);
-                console.log(`Class: ${testClasses[idx]}`);
-                console.log(`Group: ${testGroups[idx]}`);
-              });
-            } else {
-              sugestoesIA.push({
-                key: 'cenario-unico',
-                sugestao: respostaRaw,
-                testType: extractTestType(respostaRaw)[0] || '',
-                testClass: extractTestClass(respostaRaw)[0] || '',
-                testGroup: extractTestGroup(respostaRaw)[0] || ''
-              });
-            }
+
+            // ✅ ALTERAÇÃO MÍNIMA:
+            // Agora suporta JSON consistente (novo) e também mantém o parser antigo (texto).
+            const sugestoesNormalizadas = buildSugestoesIAFromResposta(
+              respostaRaw,
+              extrairTodosCenariosGherkin,
+              extractTestType,
+              extractTestClass,
+              extractTestGroup
+            );
+            sugestoesIA.push(...sugestoesNormalizadas);
+
           } else {
             for (const t of testes) {
               const resposta = await vscode.commands.executeCommand<any>(
@@ -217,9 +336,12 @@ export class ZephyrPanel {
                 comentario || '',
                 t.script || ''
               );
+              const respostaRaw = typeof resposta === 'string' ? resposta : (resposta?.message || 'Sem resposta da IA.');
+              const norm = normalizeAnaliseCenarioRespostaToSugestao(respostaRaw);
+
               sugestoesIA.push({
                 key: t.key,
-                sugestao: typeof resposta === 'string' ? resposta : (resposta?.message || 'Sem resposta da IA.')
+                sugestao: norm.sugestao
               });
             }
           }
@@ -327,7 +449,7 @@ export class ZephyrPanel {
           });
         }
       } else if (message.type === 'criarScriptsEmPasta') {
-        
+
         vscode.window.showWarningMessage(`message.dados: ${JSON.stringify(message.dados)}`);
         const caminho = message.dados.caminho;
         const itens = message.dados.itens;
@@ -336,7 +458,7 @@ export class ZephyrPanel {
         const fileBaseName = message.dados.fileBaseName;
         const tribeName = message.dados.tribeName;
         const extraTags = message.dados.extraTags;
-  
+
         if (!caminho) {
           vscode.window.showWarningMessage('Selecione uma pasta de destino antes de enviar.');
           return;
@@ -351,21 +473,21 @@ export class ZephyrPanel {
           fileBaseName: fileBaseName,
           tribeName: tribeName,
           extraTags: extraTags
-         });
-         const report = await generateSteps(caminho, itens, {
+        });
+        const report = await generateSteps(caminho, itens, {
           featureName: featureName,
           ruleName: ruleName,
           fileBaseName: fileBaseName,
           tribeName: tribeName,
           extraTags: extraTags
-         });
+        });
 
-         // Envie para a Webview
+        // Envie para a Webview
         panel.webview.postMessage({
           type: "steps:report",
           payload: report,
         });
-      } else if (message.type === 'listarProjetosJira'){
+      } else if (message.type === 'listarProjetosJira') {
         try {
           // Chama o comando já registrado no extension.ts
           // Ele retorna algo como: [{ key: 'ABC', name: 'Meu Projeto' }, ...]
@@ -382,26 +504,28 @@ export class ZephyrPanel {
           vscode.window.showErrorMessage(`Erro ao listar projetos do Jira: ${err?.message || err}`);
           this._panel.webview.postMessage({ type: 'projetosJira', projects: [] });
         }
-      } else if (message.type === 'carregarEstruturaProjeto'){
+      } else if (message.type === 'carregarEstruturaProjeto') {
         try {
-            const projectKey: string = message.projetoIdOuKey || '';
-            const resultado = await vscode.commands.executeCommand<any>(
-              'plugin-vscode.getZephyrFoldersByProject',
-              projectKey // já é a KEY
-            );
+          const projectKey: string = message.projetoIdOuKey || '';
+          const resultado = await vscode.commands.executeCommand<any>(
+            'plugin-vscode.getZephyrFoldersByProject',
+            projectKey // já é a KEY
+          );
 
-            this._panel.webview.postMessage({
-              type: 'estruturaProjeto',
-              folders: resultado?.folders || [], // árvore
-              flat: resultado?.flat || [],       // lista plana (se quiser usar)
-              projectKey: resultado?.projectKey || projectKey
-            });
-          } catch (e: any) {
-            vscode.window.showErrorMessage(`Erro ao carregar estrutura do projeto: ${e.message || e}`);
-            this._panel.webview.postMessage({ type: 'estruturaProjeto', folders: [], flat: [], projectKey: '' });
-          }
-      }else if (message.type === 'aplicarFiltrosProjeto') {
-        // 👉 novo caso: ao aplicar seleção, buscar "todos os testes que estão naquela pasta"
+          this._panel.webview.postMessage({
+            type: 'estruturaProjeto',
+            folders: resultado?.folders || [], // árvore
+            flat: resultado?.flat || [],       // lista plana (se quiser usar)
+            projectKey: resultado?.requestedProjectKey || projectKey,
+            zephyrProjectKey: resultado?.projectKey || '',
+            project: resultado?.project || null
+          });
+        } catch (e: any) {
+          vscode.window.showErrorMessage(`Erro ao carregar estrutura do projeto: ${e.message || e}`);
+          this._panel.webview.postMessage({ type: 'estruturaProjeto', folders: [], flat: [], projectKey: '' });
+        }
+      } else if (message.type === 'aplicarFiltrosProjeto') {
+        // &#x1f449; novo caso: ao aplicar seleção, buscar "todos os testes que estão naquela pasta"
         try {
           const projectKey: string = message.projetoIdOuKey || '';
           const pastaIds: string[] = Array.isArray(message.pastaIds) ? message.pastaIds : [];
@@ -445,6 +569,7 @@ export class ZephyrPanel {
     });
     // Envia nome do usuário assim que carrega
     this.sendNomeUsuario();
+    this._panel.webview.postMessage({ type: 'issueContext', issueId, issueKey, comentario });
     // Envia dados do Zephyr
     this.zephyr(issueId, issueKey, comentario);
   }
@@ -454,31 +579,35 @@ export class ZephyrPanel {
       ZephyrPanel.currentPanel._panel.reveal(column);
       // Se a issueKey for diferente, atualiza
       if (ZephyrPanel.currentPanel.issueKey !== issueKey) {
+        ZephyrPanel.currentPanel.issueId = issueId;
         ZephyrPanel.currentPanel.issueKey = issueKey;
+        ZephyrPanel.currentPanel.comentario = comentario;
         // Limpa estado da tela e reinicia o carregamento
         ZephyrPanel.currentPanel._panel.webview.postMessage({
           type: 'novoId',
+          issueId,
           issueKey,
           comentario
         });
+        ZephyrPanel.currentPanel._panel.webview.postMessage({ type: 'issueContext', issueId, issueKey, comentario });
         // Reenvia os dados com novo issueKey
         ZephyrPanel.currentPanel.sendNomeUsuario();
         ZephyrPanel.currentPanel.zephyr(issueId, issueKey, comentario);
       }
     } else {
       const panel = vscode.window.createWebviewPanel(
-      'zephyrView',
-      'Zephyr',
-      column,
-      {
-        enableScripts: true,
-        retainContextWhenHidden: true, // preserva DOM/JS ao trocar de aba
-        localResourceRoots: [
-          vscode.Uri.joinPath(extensionUri, 'media'),
-          vscode.Uri.joinPath(extensionUri, 'out'),
-        ],
-      }
-    );
+        'zephyrView',
+        'Zephyr',
+        column,
+        {
+          enableScripts: true,
+          retainContextWhenHidden: true, // preserva DOM/JS ao trocar de aba
+          localResourceRoots: [
+            vscode.Uri.joinPath(extensionUri, 'media'),
+            vscode.Uri.joinPath(extensionUri, 'out'),
+          ],
+        }
+      );
       ZephyrPanel.currentPanel = new ZephyrPanel(panel, extensionUri, issueId, issueKey, comentario);
     }
   }
@@ -496,6 +625,13 @@ export class ZephyrPanel {
       this._panel.webview.postMessage({ type: 'zephyrData', issueId, issueKey, zephyrData, comentario });
     } catch (error) {
       console.error('Erro ao obter dados do Zephyr:', error);
+      this._panel.webview.postMessage({
+        type: 'zephyrData',
+        issueId,
+        issueKey,
+        comentario,
+        zephyrData: { key: issueKey, testesZephyr: [] }
+      });
     }
   }
   private async handleMessage(message: any) {
@@ -505,7 +641,7 @@ export class ZephyrPanel {
         'plugin-vscode.getZephyrTestToIssue',
         key
       );
-      console.log('🔍 Resultado da issue:', issue);
+      console.log('&#x1f50d; Resultado da issue:', issue);
       if (issue && typeof issue === 'object' && 'key' in issue) {
         this._panel.webview.postMessage({ type: 'detalhesIssue', issue });
       } else {
@@ -515,7 +651,7 @@ export class ZephyrPanel {
         });
       }
     }
-  }  
+  }
 }
 
 // (opcional, mas recomendado) — normaliza o shape dos testes pro que a webview espera
