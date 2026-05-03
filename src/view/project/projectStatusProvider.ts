@@ -159,9 +159,9 @@ function findResultFiles(root: string): string[] {
       if (!entry.isFile()) continue;
       const lower = entry.name.toLowerCase();
       const parent = path.dirname(fullPath).toLowerCase();
-      const likelyReportDir = parent.includes('cypress') || parent.includes('report') || parent.includes('result') || parent.includes('mochawesome');
+      const likelyReportDir = parent.includes('cypress') || parent.includes('report') || parent.includes('result') || parent.includes('mochawesome') || parent.includes('temp');
       const likelyReportFile = lower.endsWith('.json') || lower.endsWith('.xml');
-      const knownName = lower.includes('mochawesome') || lower.includes('junit') || lower.includes('cypress');
+      const knownName = lower.includes('mochawesome') || lower.includes('junit') || lower.includes('cypress') || lower.includes('results_scenarios') || lower.includes('resultrest');
 
       if (likelyReportDir && likelyReportFile && (knownName || parent.includes('result') || parent.includes('report'))) {
         files.push(fullPath);
@@ -188,6 +188,25 @@ function parseCypressResult(file: string): CypressResult | undefined {
 
 function parseJsonResult(file: string, content: string): CypressResult | undefined {
   const json = JSON.parse(content);
+
+  if (Array.isArray(json) && json.some(item => item?.nomeCenario || item?.status || item?.annotation)) {
+    const cases = json.map(item => ({
+      title: [item?.annotation, item?.nomeCenario || item?.title].filter(Boolean).join(' - ') || 'Cenario sem nome',
+      status: normalizeStatus(item?.status),
+      duration: formatDuration(item?.duration),
+      error: item?.errorMessage || undefined,
+    }));
+
+    return {
+      file,
+      tests: cases.length,
+      passes: cases.filter(test => test.status === 'passed').length,
+      failures: cases.filter(test => test.status === 'failed').length,
+      pending: cases.filter(test => test.status === 'pending').length,
+      cases,
+    };
+  }
+
   const stats = json?.stats || json?.results?.stats || json?.result?.stats;
   if (stats) {
     return {
@@ -292,7 +311,7 @@ function normalizeStatus(value: unknown): CypressTestCase['status'] {
   const status = String(value || '').toLowerCase();
   if (['passed', 'pass', 'ok'].includes(status)) return 'passed';
   if (['failed', 'fail', 'error'].includes(status)) return 'failed';
-  if (['pending', 'skipped', 'skip'].includes(status)) return 'pending';
+  if (['pending', 'skipped', 'skip', 'not executed'].includes(status)) return 'pending';
   return 'unknown';
 }
 

@@ -272,7 +272,7 @@ function activate(context) {
         }), vscode.window.createTreeView('qualityTestsView', {
             treeDataProvider: cypressTestsProvider,
             showCollapseAll: true,
-        }), vscode.window.createTreeView('qualityProjectStatusView', {
+        }), cypressTestsProvider, vscode.window.createTreeView('qualityProjectStatusView', {
             treeDataProvider: projectStatusProvider,
             showCollapseAll: true,
         }), vscode.commands.registerCommand('plugin-vscode.refreshArtifacts', () => artifactsTreeProvider.refresh()), vscode.commands.registerCommand('plugin-vscode.refreshTests', () => cypressTestsProvider.refresh()), vscode.commands.registerCommand('plugin-vscode.cypressOpen', () => runCypressTerminal('open')), vscode.commands.registerCommand('plugin-vscode.cypressRun', () => runCypressTerminal('run')), vscode.commands.registerCommand('plugin-vscode.refreshProjectStatus', () => projectStatusProvider.refresh()));

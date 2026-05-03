@@ -18,8 +18,8 @@ export class JiraPanel {
     this._extensionUri = extensionUri;
 
     const webview = this._panel.webview;
-    const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'style', 'style.css'));
-    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'media', 'jira', 'jira.js'));
+    const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'out', 'view', 'style', 'style.css'));
+    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'out', 'view', 'jira', 'jira.js'));
     const nonce = getNonce();
 
     this._panel.webview.html = getJiraViewContent({
@@ -47,7 +47,7 @@ export class JiraPanel {
     } else {
       const panel = vscode.window.createWebviewPanel('jiraView', 'Jira', vscode.ViewColumn.One, {
         enableScripts: true,
-        localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'media')]
+        localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'out', 'view')]
       });
       JiraPanel.currentPanel = new JiraPanel(panel, extensionUri);
     }

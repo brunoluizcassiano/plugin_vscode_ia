@@ -32,16 +32,44 @@ export class CypressTestsProvider implements vscode.TreeDataProvider<CypressTest
 
   private result?: CypressResult;
   private loading = false;
+  private watchers: vscode.FileSystemWatcher[] = [];
+  private watchedRoot?: string;
+
+  constructor() {
+    this.configureWatchers();
+  }
 
   async refresh() {
     this.loading = true;
     this.onDidChangeTreeDataEmitter.fire();
 
     const root = findCypressProjectRoot();
-    this.result = root ? await getLatestCypressResult(root) : undefined;
+    this.configureWatchers(root);
+    const latest = root ? await getLatestCypressResult(root) : undefined;
+    this.result = latest || this.result;
 
     this.loading = false;
     this.onDidChangeTreeDataEmitter.fire();
+  }
+
+  dispose() {
+    this.watchers.forEach(watcher => watcher.dispose());
+    this.watchers = [];
+  }
+
+  private configureWatchers(root = findCypressProjectRoot()) {
+    if (!root || root === this.watchedRoot) return;
+
+    this.watchers.forEach(watcher => watcher.dispose());
+    this.watchers = [];
+    this.watchedRoot = root;
+
+    for (const pattern of ['temp/**/*.{json,xml}', 'report/**/*.{json,xml}', 'cypress/report/**/*.{json,xml}']) {
+      const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(root, pattern));
+      watcher.onDidCreate(() => void this.refresh());
+      watcher.onDidChange(() => void this.refresh());
+      this.watchers.push(watcher);
+    }
   }
 
   getTreeItem(element: CypressTestItem): vscode.TreeItem {

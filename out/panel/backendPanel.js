@@ -51,8 +51,8 @@ class BackendPanel {
         this.panel = panel;
         this.extensionUri = extensionUri;
         const webview = this.panel.webview;
-        const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'style', 'style.css'));
-        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'backend', 'backend.js'));
+        const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'out', 'view', 'style', 'style.css'));
+        const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'out', 'view', 'backend', 'backend.js'));
         const nonce = getNonce();
         this.panel.webview.html = (0, backendViewForm_1.getBackendviewContent)({
             webview,
@@ -70,7 +70,7 @@ class BackendPanel {
             BackendPanel.currentPanel.panel.reveal();
             return;
         }
-        const panel = vscode.window.createWebviewPanel('backendview', 'Backend', vscode.ViewColumn.One, { enableScripts: true, localResourceRoots: [extensionUri] });
+        const panel = vscode.window.createWebviewPanel('backendview', 'Backend', vscode.ViewColumn.One, { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'out', 'view')] });
         BackendPanel.currentPanel = new BackendPanel(panel, extensionUri);
     }
     registerMessageHandlers() {

@@ -208,7 +208,7 @@
         }
     },
     "scripts": {
-        "vscode:prepublish": "tsc -p ./",
+        "vscode:prepublish": "tsc -p ./ && node scripts/copy-webview-assets.js",
         "package": "vsce package"
     },
     "dependencies": {

@@ -267,6 +267,7 @@ export async function activate(context: vscode.ExtensionContext) {
       treeDataProvider: cypressTestsProvider,
       showCollapseAll: true,
     }),
+    cypressTestsProvider,
     vscode.window.createTreeView('qualityProjectStatusView', {
       treeDataProvider: projectStatusProvider,
       showCollapseAll: true,

@@ -50,8 +50,8 @@ export class SettingsPanel {
    this.panel = panel;
    this.extensionUri = extensionUri;
    const webview = this.panel.webview;
-   const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'style', 'style.css'));
-   const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'media', 'settings', 'settings.js'));
+   const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'out', 'view', 'style', 'style.css'));
+   const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, 'out', 'view', 'settings', 'settings.js'));
    const nonce = getNonce();
    this.panel.webview.html = getSettingsViewContent({
      webview,
@@ -71,7 +71,7 @@ export class SettingsPanel {
      'settingsView',
      'Settings',
      vscode.ViewColumn.One,
-     { enableScripts: true, localResourceRoots: [extensionUri] }
+     { enableScripts: true, localResourceRoots: [vscode.Uri.joinPath(extensionUri, 'out', 'view')] }
    );
    SettingsPanel.currentPanel = new SettingsPanel(panel, extensionUri);
  }
